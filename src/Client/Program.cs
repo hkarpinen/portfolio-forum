@@ -149,7 +149,6 @@ try
     });
 
     app.UseSerilogRequestLogging();
-    app.UseHttpsRedirection();
     app.UseCors();
     app.UseRateLimiter();
     app.UseAuthentication();
