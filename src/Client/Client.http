@@ -1,0 +1,6 @@
+@Client_HostAddress = http://localhost:5170
+
+GET {{Client_HostAddress}}/healthz
+Accept: application/json
+
+###
