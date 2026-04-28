@@ -8,7 +8,7 @@ using NpgsqlTypes;
 namespace Infrastructure.Persistence.Migrations
 {
     /// <inheritdoc />
-    public partial class InitialCreate : Migration
+    public partial class FreshStart : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -24,10 +24,12 @@ namespace Infrastructure.Persistence.Migrations
                     id = table.Column<Guid>(type: "uuid", nullable: false),
                     thread_id = table.Column<Guid>(type: "uuid", nullable: false),
                     author_id = table.Column<Guid>(type: "uuid", nullable: false),
+                    parent_comment_id = table.Column<Guid>(type: "uuid", nullable: true),
                     content = table.Column<string>(type: "text", nullable: false),
                     created_at = table.Column<DateTime>(type: "timestamptz", nullable: false),
                     edited_at = table.Column<DateTime>(type: "timestamptz", nullable: true),
                     deleted_at = table.Column<DateTime>(type: "timestamptz", nullable: true),
+                    vote_score = table.Column<int>(type: "integer", nullable: false, defaultValue: 0),
                     search_vector = table.Column<NpgsqlTsVector>(type: "tsvector", nullable: true, computedColumnSql: "to_tsvector('english', coalesce(content, ''))", stored: true)
                 },
                 constraints: table =>
@@ -41,7 +43,10 @@ namespace Infrastructure.Persistence.Migrations
                 columns: table => new
                 {
                     id = table.Column<Guid>(type: "uuid", nullable: false),
+                    slug = table.Column<string>(type: "character varying(120)", maxLength: 120, nullable: false),
                     name = table.Column<string>(type: "character varying(120)", maxLength: 120, nullable: false),
+                    description = table.Column<string>(type: "character varying(1000)", maxLength: 1000, nullable: true),
+                    image_url = table.Column<string>(type: "character varying(2048)", maxLength: 2048, nullable: true),
                     visibility = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
                     owner_id = table.Column<Guid>(type: "uuid", nullable: false),
                     created_at = table.Column<DateTime>(type: "timestamptz", nullable: false),
@@ -79,8 +84,7 @@ namespace Infrastructure.Persistence.Migrations
                     community_id = table.Column<Guid>(type: "uuid", nullable: false),
                     user_id = table.Column<Guid>(type: "uuid", nullable: false),
                     role = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
-                    joined_at = table.Column<DateTime>(type: "timestamptz", nullable: false),
-                    left_at = table.Column<DateTime>(type: "timestamptz", nullable: true)
+                    joined_at = table.Column<DateTime>(type: "timestamptz", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -167,6 +171,7 @@ namespace Infrastructure.Persistence.Migrations
                     is_locked = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
                     is_pinned = table.Column<bool>(type: "boolean", nullable: false, defaultValue: false),
                     deleted_at = table.Column<DateTime>(type: "timestamptz", nullable: true),
+                    vote_score = table.Column<int>(type: "integer", nullable: false, defaultValue: 0),
                     search_vector = table.Column<NpgsqlTsVector>(type: "tsvector", nullable: true, computedColumnSql: "to_tsvector('english', coalesce(title, '') || ' ' || coalesce(content, ''))", stored: true)
                 },
                 constraints: table =>
@@ -197,12 +202,11 @@ namespace Infrastructure.Persistence.Migrations
                 columns: table => new
                 {
                     id = table.Column<Guid>(type: "uuid", nullable: false),
-                    target_type = table.Column<string>(type: "character varying(20)", maxLength: 20, nullable: false),
+                    target_type = table.Column<short>(type: "smallint", nullable: false),
                     target_id = table.Column<Guid>(type: "uuid", nullable: false),
                     user_id = table.Column<Guid>(type: "uuid", nullable: false),
                     direction = table.Column<short>(type: "smallint", nullable: false),
-                    cast_at = table.Column<DateTime>(type: "timestamptz", nullable: false),
-                    retracted_at = table.Column<DateTime>(type: "timestamptz", nullable: true)
+                    cast_at = table.Column<DateTime>(type: "timestamptz", nullable: false)
                 },
                 constraints: table =>
                 {
@@ -226,7 +230,8 @@ namespace Infrastructure.Persistence.Migrations
                 name: "ix_comments_thread_id_created_at",
                 schema: "forum",
                 table: "comments",
-                columns: new[] { "thread_id", "created_at" });
+                columns: new[] { "thread_id", "created_at" },
+                filter: "deleted_at IS NULL");
 
             migrationBuilder.CreateIndex(
                 name: "ix_communities_name",
@@ -247,6 +252,13 @@ namespace Infrastructure.Persistence.Migrations
                 table: "communities",
                 column: "search_vector")
                 .Annotation("Npgsql:IndexMethod", "GIN");
+
+            migrationBuilder.CreateIndex(
+                name: "ix_communities_slug",
+                schema: "forum",
+                table: "communities",
+                column: "slug",
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "ix_community_bans_community_id_user_id",
@@ -301,7 +313,8 @@ namespace Infrastructure.Persistence.Migrations
                 name: "ix_threads_community_id_created_at",
                 schema: "forum",
                 table: "threads",
-                columns: new[] { "community_id", "created_at" });
+                columns: new[] { "community_id", "created_at" },
+                filter: "deleted_at IS NULL");
 
             migrationBuilder.CreateIndex(
                 name: "ix_threads_search_vector",
@@ -316,6 +329,12 @@ namespace Infrastructure.Persistence.Migrations
                 table: "user_projections",
                 column: "user_name",
                 unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "ix_votes_target_type_target_id",
+                schema: "forum",
+                table: "votes",
+                columns: new[] { "target_type", "target_id" });
 
             migrationBuilder.CreateIndex(
                 name: "ix_votes_target_type_target_id_user_id",

@@ -33,9 +33,6 @@ internal sealed class CommunityMembershipConfiguration : IEntityTypeConfiguratio
             .HasColumnType("timestamptz")
             .IsRequired();
 
-        builder.Property(x => x.LeftAt)
-            .HasColumnType("timestamptz");
-
         builder.HasIndex(x => new { x.CommunityId, x.UserId })
             .IsUnique();
 

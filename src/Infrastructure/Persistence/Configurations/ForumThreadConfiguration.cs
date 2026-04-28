@@ -50,6 +50,10 @@ internal sealed class ForumThreadConfiguration : IEntityTypeConfiguration<ForumT
             .HasDefaultValue(false)
             .IsRequired();
 
+        builder.Property(x => x.VoteScore)
+            .HasDefaultValue(0)
+            .IsRequired();
+
         builder.Property<NpgsqlTsVector>("search_vector")
             .HasColumnType("tsvector")
             .HasComputedColumnSql("to_tsvector('english', coalesce(title, '') || ' ' || coalesce(content, ''))", stored: true);
@@ -57,7 +61,8 @@ internal sealed class ForumThreadConfiguration : IEntityTypeConfiguration<ForumT
         builder.HasIndex("search_vector")
             .HasMethod("GIN");
 
-        builder.HasIndex(x => new { x.CommunityId, x.CreatedAt });
+        builder.HasIndex(x => new { x.CommunityId, x.CreatedAt })
+            .HasFilter("deleted_at IS NULL");
         builder.HasIndex(x => x.AuthorId);
 
         builder.Ignore(x => x.DomainEvents);

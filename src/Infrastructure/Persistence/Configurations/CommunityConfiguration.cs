@@ -21,6 +21,10 @@ internal sealed class CommunityConfiguration : IEntityTypeConfiguration<Communit
             .HasMaxLength(120)
             .IsRequired();
 
+        builder.Property(x => x.Slug)
+            .HasMaxLength(120)
+            .IsRequired();
+
         builder.Property(x => x.Description)
             .HasMaxLength(1000);
 
@@ -51,6 +55,7 @@ internal sealed class CommunityConfiguration : IEntityTypeConfiguration<Communit
             .HasMethod("GIN");
 
         builder.HasIndex(x => x.Name).IsUnique();
+        builder.HasIndex(x => x.Slug).IsUnique();
         builder.HasIndex(x => x.OwnerId);
 
         builder.Ignore(x => x.DomainEvents);

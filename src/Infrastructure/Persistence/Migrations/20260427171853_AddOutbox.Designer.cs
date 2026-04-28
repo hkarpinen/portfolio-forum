@@ -14,8 +14,8 @@ using NpgsqlTypes;
 namespace Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(ForumDbContext))]
-    [Migration("20260422223502_AddCommunityDescriptionAndImage")]
-    partial class AddCommunityDescriptionAndImage
+    [Migration("20260427171853_AddOutbox")]
+    partial class AddOutbox
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -55,9 +55,19 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamptz")
                         .HasColumnName("edited_at");
 
+                    b.Property<Guid?>("ParentCommentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("parent_comment_id");
+
                     b.Property<Guid>("ThreadId")
                         .HasColumnType("uuid")
                         .HasColumnName("thread_id");
+
+                    b.Property<int>("VoteScore")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("vote_score");
 
                     b.Property<NpgsqlTsVector>("search_vector")
                         .ValueGeneratedOnAddOrUpdate()
@@ -77,7 +87,8 @@ namespace Infrastructure.Persistence.Migrations
                     NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("search_vector"), "GIN");
 
                     b.HasIndex("ThreadId", "CreatedAt")
-                        .HasDatabaseName("ix_comments_thread_id_created_at");
+                        .HasDatabaseName("ix_comments_thread_id_created_at")
+                        .HasFilter("deleted_at IS NULL");
 
                     b.ToTable("comments", "forum");
                 });
@@ -112,6 +123,12 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("owner_id");
 
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("slug");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamptz")
                         .HasColumnName("updated_at");
@@ -137,6 +154,10 @@ namespace Infrastructure.Persistence.Migrations
 
                     b.HasIndex("OwnerId")
                         .HasDatabaseName("ix_communities_owner_id");
+
+                    b.HasIndex("Slug")
+                        .IsUnique()
+                        .HasDatabaseName("ix_communities_slug");
 
                     b.HasIndex("search_vector")
                         .HasDatabaseName("ix_communities_search_vector");
@@ -195,10 +216,6 @@ namespace Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("JoinedAt")
                         .HasColumnType("timestamptz")
                         .HasColumnName("joined_at");
-
-                    b.Property<DateTime?>("LeftAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("left_at");
 
                     b.Property<string>("Role")
                         .IsRequired()
@@ -301,6 +318,12 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(300)")
                         .HasColumnName("title");
 
+                    b.Property<int>("VoteScore")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("vote_score");
+
                     b.Property<NpgsqlTsVector>("search_vector")
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("tsvector")
@@ -319,7 +342,8 @@ namespace Infrastructure.Persistence.Migrations
                     NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("search_vector"), "GIN");
 
                     b.HasIndex("CommunityId", "CreatedAt")
-                        .HasDatabaseName("ix_threads_community_id_created_at");
+                        .HasDatabaseName("ix_threads_community_id_created_at")
+                        .HasFilter("deleted_at IS NULL");
 
                     b.ToTable("threads", "forum");
                 });
@@ -382,18 +406,12 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnType("smallint")
                         .HasColumnName("direction");
 
-                    b.Property<DateTime?>("RetractedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("retracted_at");
-
                     b.Property<Guid>("TargetId")
                         .HasColumnType("uuid")
                         .HasColumnName("target_id");
 
-                    b.Property<string>("TargetType")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
+                    b.Property<short>("TargetType")
+                        .HasColumnType("smallint")
                         .HasColumnName("target_type");
 
                     b.Property<Guid>("UserId")
@@ -402,6 +420,9 @@ namespace Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_votes");
+
+                    b.HasIndex("TargetType", "TargetId")
+                        .HasDatabaseName("ix_votes_target_type_target_id");
 
                     b.HasIndex("TargetType", "TargetId", "UserId")
                         .IsUnique()
@@ -490,6 +511,69 @@ namespace Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ix_notifications_user_id_read_created_at");
 
                     b.ToTable("notifications", "forum");
+                });
+
+            modelBuilder.Entity("Infrastructure.Persistence.OutboxMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<bool>("DeadLettered")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("dead_lettered");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("event_type");
+
+                    b.Property<DateTime?>("LastAttemptAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_attempt_at");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("last_error");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("payload");
+
+                    b.Property<bool>("Published")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("published");
+
+                    b.Property<DateTime?>("PublishedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("published_at");
+
+                    b.Property<int>("RetryCount")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("retry_count");
+
+                    b.HasKey("Id")
+                        .HasName("pk_outbox_messages");
+
+                    b.HasIndex("Published", "DeadLettered")
+                        .HasDatabaseName("ix_outbox_messages_published_dead_lettered")
+                        .HasFilter("published = false AND dead_lettered = false");
+
+                    b.ToTable("outbox_messages", "forum");
                 });
 
             modelBuilder.Entity("Infrastructure.Persistence.ProcessedEvent", b =>

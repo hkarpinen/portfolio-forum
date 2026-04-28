@@ -17,8 +17,8 @@ internal sealed class VoteConfiguration : IEntityTypeConfiguration<Vote>
             .ValueGeneratedNever();
 
         builder.Property(x => x.TargetType)
-            .HasConversion<string>()
-            .HasMaxLength(20)
+            .HasConversion(t => (short)t, v => (VoteTargetType)v)
+            .HasColumnType("smallint")
             .IsRequired();
 
         builder.Property(x => x.TargetId)
@@ -37,11 +37,10 @@ internal sealed class VoteConfiguration : IEntityTypeConfiguration<Vote>
             .HasColumnType("timestamptz")
             .IsRequired();
 
-        builder.Property(x => x.RetractedAt)
-            .HasColumnType("timestamptz");
-
         builder.HasIndex(x => new { x.TargetType, x.TargetId, x.UserId })
             .IsUnique();
+
+        builder.HasIndex(x => new { x.TargetType, x.TargetId });
 
         builder.Ignore(x => x.DomainEvents);
     }

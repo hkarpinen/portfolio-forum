@@ -14,8 +14,8 @@ using NpgsqlTypes;
 namespace Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(ForumDbContext))]
-    [Migration("20260422173010_InitialCreate")]
-    partial class InitialCreate
+    [Migration("20260427031525_FreshStart")]
+    partial class FreshStart
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -55,9 +55,19 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamptz")
                         .HasColumnName("edited_at");
 
+                    b.Property<Guid?>("ParentCommentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("parent_comment_id");
+
                     b.Property<Guid>("ThreadId")
                         .HasColumnType("uuid")
                         .HasColumnName("thread_id");
+
+                    b.Property<int>("VoteScore")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("vote_score");
 
                     b.Property<NpgsqlTsVector>("search_vector")
                         .ValueGeneratedOnAddOrUpdate()
@@ -77,7 +87,8 @@ namespace Infrastructure.Persistence.Migrations
                     NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("search_vector"), "GIN");
 
                     b.HasIndex("ThreadId", "CreatedAt")
-                        .HasDatabaseName("ix_comments_thread_id_created_at");
+                        .HasDatabaseName("ix_comments_thread_id_created_at")
+                        .HasFilter("deleted_at IS NULL");
 
                     b.ToTable("comments", "forum");
                 });
@@ -92,6 +103,16 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnType("timestamptz")
                         .HasColumnName("created_at");
 
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("ImageUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("image_url");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(120)
@@ -101,6 +122,12 @@ namespace Infrastructure.Persistence.Migrations
                     b.Property<Guid>("OwnerId")
                         .HasColumnType("uuid")
                         .HasColumnName("owner_id");
+
+                    b.Property<string>("Slug")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("slug");
 
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamptz")
@@ -127,6 +154,10 @@ namespace Infrastructure.Persistence.Migrations
 
                     b.HasIndex("OwnerId")
                         .HasDatabaseName("ix_communities_owner_id");
+
+                    b.HasIndex("Slug")
+                        .IsUnique()
+                        .HasDatabaseName("ix_communities_slug");
 
                     b.HasIndex("search_vector")
                         .HasDatabaseName("ix_communities_search_vector");
@@ -185,10 +216,6 @@ namespace Infrastructure.Persistence.Migrations
                     b.Property<DateTime>("JoinedAt")
                         .HasColumnType("timestamptz")
                         .HasColumnName("joined_at");
-
-                    b.Property<DateTime?>("LeftAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("left_at");
 
                     b.Property<string>("Role")
                         .IsRequired()
@@ -291,6 +318,12 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(300)")
                         .HasColumnName("title");
 
+                    b.Property<int>("VoteScore")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("vote_score");
+
                     b.Property<NpgsqlTsVector>("search_vector")
                         .ValueGeneratedOnAddOrUpdate()
                         .HasColumnType("tsvector")
@@ -309,7 +342,8 @@ namespace Infrastructure.Persistence.Migrations
                     NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("search_vector"), "GIN");
 
                     b.HasIndex("CommunityId", "CreatedAt")
-                        .HasDatabaseName("ix_threads_community_id_created_at");
+                        .HasDatabaseName("ix_threads_community_id_created_at")
+                        .HasFilter("deleted_at IS NULL");
 
                     b.ToTable("threads", "forum");
                 });
@@ -372,18 +406,12 @@ namespace Infrastructure.Persistence.Migrations
                         .HasColumnType("smallint")
                         .HasColumnName("direction");
 
-                    b.Property<DateTime?>("RetractedAt")
-                        .HasColumnType("timestamptz")
-                        .HasColumnName("retracted_at");
-
                     b.Property<Guid>("TargetId")
                         .HasColumnType("uuid")
                         .HasColumnName("target_id");
 
-                    b.Property<string>("TargetType")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
+                    b.Property<short>("TargetType")
+                        .HasColumnType("smallint")
                         .HasColumnName("target_type");
 
                     b.Property<Guid>("UserId")
@@ -392,6 +420,9 @@ namespace Infrastructure.Persistence.Migrations
 
                     b.HasKey("Id")
                         .HasName("pk_votes");
+
+                    b.HasIndex("TargetType", "TargetId")
+                        .HasDatabaseName("ix_votes_target_type_target_id");
 
                     b.HasIndex("TargetType", "TargetId", "UserId")
                         .IsUnique()

@@ -25,6 +25,10 @@ internal sealed class CommentConfiguration : IEntityTypeConfiguration<Comment>
             .HasConversion(id => id.Value, value => new UserId(value))
             .IsRequired();
 
+        builder.Property(x => x.ParentCommentId)
+            .HasConversion(id => id != null ? id.Value : (Guid?)null, value => value.HasValue ? new CommentId(value.Value) : null)
+            .HasColumnName("parent_comment_id");
+
         builder.Property(x => x.Content)
             .HasColumnType("text")
             .IsRequired();
@@ -39,6 +43,10 @@ internal sealed class CommentConfiguration : IEntityTypeConfiguration<Comment>
         builder.Property(x => x.DeletedAt)
             .HasColumnType("timestamptz");
 
+        builder.Property(x => x.VoteScore)
+            .HasDefaultValue(0)
+            .IsRequired();
+
         builder.Property<NpgsqlTsVector>("search_vector")
             .HasColumnType("tsvector")
             .HasComputedColumnSql("to_tsvector('english', coalesce(content, ''))", stored: true);
@@ -46,7 +54,8 @@ internal sealed class CommentConfiguration : IEntityTypeConfiguration<Comment>
         builder.HasIndex("search_vector")
             .HasMethod("GIN");
 
-        builder.HasIndex(x => new { x.ThreadId, x.CreatedAt });
+        builder.HasIndex(x => new { x.ThreadId, x.CreatedAt })
+            .HasFilter("deleted_at IS NULL");
         builder.HasIndex(x => x.AuthorId);
 
         builder.Ignore(x => x.DomainEvents);
