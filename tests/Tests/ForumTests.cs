@@ -155,6 +155,7 @@ public class ForumThreadTests
     {
         return ForumThread.Create(
             new CommunityId(Guid.NewGuid()),
+            "test-community",
             new UserId(Guid.NewGuid()),
             title,
             content);
@@ -168,7 +169,7 @@ public class ForumThreadTests
         var authorId = new UserId(Guid.NewGuid());
 
         // Act
-        var thread = ForumThread.Create(communityId, authorId, "Title", "Content");
+        var thread = ForumThread.Create(communityId, "test-community", authorId, "Title", "Content");
 
         // Assert
         Assert.Equal(communityId, thread.CommunityId);
@@ -184,7 +185,7 @@ public class ForumThreadTests
     public void Create_EmptyTitle_ShouldThrow()
     {
         Assert.Throws<ArgumentException>(() =>
-            ForumThread.Create(new CommunityId(Guid.NewGuid()), new UserId(Guid.NewGuid()), "  ", null));
+            ForumThread.Create(new CommunityId(Guid.NewGuid()), "test-community", new UserId(Guid.NewGuid()), "  ", null));
     }
 
     [Fact]
