@@ -12,14 +12,16 @@ public sealed class Comment
     public CommentId Id { get; private set; }
     public ThreadId ThreadId { get; private set; }
     public UserId AuthorId { get; private set; }
+    public CommentId? ParentCommentId { get; private set; }
     public string Content { get; private set; } = string.Empty;
     public DateTime CreatedAt { get; private set; }
     public DateTime? EditedAt { get; private set; }
     public DateTime? DeletedAt { get; private set; }
+    public int VoteScore { get; private set; }
 
     private Comment() { }
 
-    public static Comment Create(ThreadId threadId, UserId authorId, string content)
+    public static Comment Create(ThreadId threadId, UserId authorId, string content, CommentId? parentCommentId = null)
     {
         if (string.IsNullOrWhiteSpace(content))
             throw new ArgumentException("Content cannot be empty.", nameof(content));
@@ -29,10 +31,11 @@ public sealed class Comment
             Id = new CommentId(Guid.NewGuid()),
             ThreadId = threadId,
             AuthorId = authorId,
+            ParentCommentId = parentCommentId,
             Content = content,
             CreatedAt = DateTime.UtcNow
         };
-        comment._domainEvents.Add(new CommentCreated(comment.Id, threadId, authorId, content, comment.CreatedAt));
+        comment._domainEvents.Add(new CommentCreated(comment.Id, threadId, authorId, content, comment.CreatedAt, parentCommentId));
         return comment;
     }
 
@@ -55,6 +58,11 @@ public sealed class Comment
 
         DeletedAt = deletedAt;
         _domainEvents.Add(new CommentDeleted(Id, deletedAt));
+    }
+
+    public void AdjustVoteScore(int delta)
+    {
+        VoteScore += delta;
     }
 }
 

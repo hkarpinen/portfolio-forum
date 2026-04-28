@@ -59,32 +59,46 @@ public sealed class CommunitiesController : ControllerBase
         return result is null ? NotFound() : Ok(result);
     }
 
-    [HttpGet("by-name/{name}")]
+    [HttpGet("by-slug/{slug}")]
     [AllowAnonymous]
-    public async Task<IActionResult> GetByName([FromRoute] string name, CancellationToken cancellationToken)
+    public async Task<IActionResult> GetBySlug([FromRoute] string slug, CancellationToken cancellationToken)
     {
-        var result = await _communityQuery.GetByNameAsync(new CommunityByNameRequest(name), cancellationToken);
+        var result = await _communityQuery.GetBySlugAsync(new CommunityBySlugRequest(slug), cancellationToken);
         return result is null ? NotFound() : Ok(result);
     }
 
     [HttpPut("{communityId:guid}")]
-    [Authorize(Policy = ForumAuthorizationPolicies.ModeratorOrAdmin)]
+    [Authorize(Policy = ForumAuthorizationPolicies.MemberOrAbove)]
     [EnableRateLimiting("write")]
     public async Task<IActionResult> Update([FromRoute] Guid communityId, [FromBody] UpdateCommunityDto request, CancellationToken cancellationToken)
     {
-        var result = await _communityWorkflowManager.UpdateAsync(
-            new UpdateCommunityRequest(communityId, request.Name, request.Visibility, request.Description, request.ImageUrl),
-            cancellationToken);
+        try
+        {
+            var result = await _communityWorkflowManager.UpdateAsync(
+                new UpdateCommunityRequest(
+                    communityId,
+                    request.Name,
+                    request.Visibility,
+                    User.GetRequiredUserId(),
+                    User.IsAdmin(),
+                    request.Description,
+                    request.ImageUrl),
+                cancellationToken);
 
-        return result is null ? NotFound() : Ok(result);
+            return result is null ? NotFound() : Ok(result);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
     }
 
     [HttpGet("{communityId:guid}/membership")]
     [Authorize(Policy = ForumAuthorizationPolicies.MemberOrAbove)]
     public async Task<IActionResult> GetMembership([FromRoute] Guid communityId, CancellationToken cancellationToken)
     {
-        var isMember = await _membershipQuery.IsMemberAsync(communityId, User.GetRequiredUserId(), cancellationToken);
-        return Ok(new { isMember });
+        var (isMember, role) = await _membershipQuery.GetMembershipAsync(communityId, User.GetRequiredUserId(), cancellationToken);
+        return Ok(new { isMember, role });
     }
 
     [HttpPost("{communityId:guid}/join")]
@@ -109,5 +123,24 @@ public sealed class CommunitiesController : ControllerBase
             cancellationToken);
 
         return result is null ? NotFound() : Ok(result);
+    }
+
+    [HttpDelete("{communityId:guid}")]
+    [Authorize(Policy = ForumAuthorizationPolicies.MemberOrAbove)]
+    [EnableRateLimiting("write")]
+    public async Task<IActionResult> Delete([FromRoute] Guid communityId, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var deleted = await _communityWorkflowManager.DeleteAsync(
+                new DeleteCommunityRequest(communityId, User.GetRequiredUserId(), User.IsAdmin()),
+                cancellationToken);
+
+            return deleted ? NoContent() : NotFound();
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
     }
 }

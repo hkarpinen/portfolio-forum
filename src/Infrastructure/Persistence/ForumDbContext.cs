@@ -15,8 +15,8 @@ public sealed class ForumDbContext : DbContext
     public DbSet<ModerationLog> ModerationLogs => Set<ModerationLog>();
     public DbSet<UserProjection> UserProjections => Set<UserProjection>();
     public DbSet<ForumProfile> ForumProfiles => Set<ForumProfile>();
-    public DbSet<ForumNotification> Notifications => Set<ForumNotification>();
     public DbSet<ProcessedEvent> ProcessedEvents => Set<ProcessedEvent>();
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     public ForumDbContext(DbContextOptions<ForumDbContext> options)
         : base(options)

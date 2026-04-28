@@ -43,15 +43,13 @@ internal sealed class MembershipManager : IMembershipManager
     public async Task<MembershipResponse?> LeaveAsync(LeaveCommunityRequest request, CancellationToken cancellationToken = default)
     {
         var membership = await _membershipRepository.GetByIdAsync(new MembershipId(request.MembershipId), cancellationToken);
-
         if (membership is null)
-        {
             return null;
-        }
 
-        membership.Leave(DateTime.UtcNow);
-        await _membershipRepository.UpdateAsync(membership, cancellationToken);
-        return Map(membership, isInvite: false);
+        // Capture response before hard-deleting the row
+        var response = Map(membership, isInvite: false);
+        await _membershipRepository.DeleteAsync(membership.Id, cancellationToken);
+        return response;
     }
 
     public async Task<MembershipResponse?> AppointModeratorAsync(AppointModeratorRequest request, CancellationToken cancellationToken = default)
@@ -89,6 +87,5 @@ internal sealed class MembershipManager : IMembershipManager
             membership.UserId.Value,
             membership.Role,
             membership.JoinedAt,
-            membership.LeftAt,
             isInvite);
 }

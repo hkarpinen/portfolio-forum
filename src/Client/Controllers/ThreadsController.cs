@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Forum.Application.Managers;
 using Forum.Application.Queries;
 using Client.Authorization;
@@ -35,13 +34,13 @@ public sealed class ThreadsController : ControllerBase
     [EnableRateLimiting("write")]
     public async Task<IActionResult> Create([FromBody] CreateThreadDto request, CancellationToken cancellationToken)
     {
-        var community = await _communityQuery.GetByNameAsync(
-            new CommunityByNameRequest(request.CommunitySlug), cancellationToken);
+        var community = await _communityQuery.GetBySlugAsync(
+            new CommunityBySlugRequest(request.CommunitySlug), cancellationToken);
         if (community is null)
             return NotFound(new { error = "Community not found." });
 
         var created = await _threadWorkflowManager.CreateAsync(
-            new CreateThreadRequest(community.CommunityId, User.GetRequiredUserId(), request.Title, request.Content),
+            new CreateThreadRequest(community.CommunityId, community.Slug, User.GetRequiredUserId(), request.Title, request.Content),
             cancellationToken);
 
         return CreatedAtAction(nameof(GetById), new { id = created.ThreadId }, created);
@@ -78,7 +77,7 @@ public sealed class ThreadsController : ControllerBase
     }
 
     [HttpDelete("{id:guid}")]
-    [Authorize(Policy = ForumAuthorizationPolicies.ModeratorOrAdmin)]
+    [Authorize(Policy = ForumAuthorizationPolicies.MemberOrAbove)]
     [EnableRateLimiting("write")]
     public async Task<IActionResult> Delete([FromRoute] Guid id, CancellationToken cancellationToken)
     {
@@ -87,7 +86,7 @@ public sealed class ThreadsController : ControllerBase
     }
 
     [HttpPost("{id:guid}/lock")]
-    [Authorize(Policy = ForumAuthorizationPolicies.ModeratorOrAdmin)]
+    [Authorize(Policy = ForumAuthorizationPolicies.MemberOrAbove)]
     [EnableRateLimiting("write")]
     public async Task<IActionResult> Lock([FromRoute] Guid id, CancellationToken cancellationToken)
     {
@@ -96,7 +95,7 @@ public sealed class ThreadsController : ControllerBase
     }
 
     [HttpPost("{id:guid}/pin")]
-    [Authorize(Policy = ForumAuthorizationPolicies.ModeratorOrAdmin)]
+    [Authorize(Policy = ForumAuthorizationPolicies.MemberOrAbove)]
     [EnableRateLimiting("write")]
     public async Task<IActionResult> Pin([FromRoute] Guid id, CancellationToken cancellationToken)
     {
@@ -104,37 +103,4 @@ public sealed class ThreadsController : ControllerBase
         return result is null ? NotFound() : Ok(result);
     }
 
-    [HttpGet("{id:guid}/events")]
-    [AllowAnonymous]
-    [EnableRateLimiting("sse")]
-    public async Task StreamThreadEvents([FromRoute] Guid id, CancellationToken cancellationToken)
-    {
-        Response.Headers.ContentType = "text/event-stream";
-        Response.Headers.CacheControl = "no-cache";
-        Response.Headers.Connection = "keep-alive";
-        Response.Headers.Append("X-Accel-Buffering", "no");
-
-        try
-        {
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                var payload = JsonSerializer.Serialize(new
-                {
-                    threadId = id,
-                    eventType = "thread.ping",
-                    occurredAt = DateTime.UtcNow
-                });
-
-                await Response.WriteAsync("event: thread.ping\n", cancellationToken);
-                await Response.WriteAsync($"data: {payload}\n\n", cancellationToken);
-                await Response.Body.FlushAsync(cancellationToken);
-
-                await Task.Delay(TimeSpan.FromSeconds(15), cancellationToken);
-            }
-        }
-        catch (OperationCanceledException)
-        {
-            // Client disconnected.
-        }
-    }
 }

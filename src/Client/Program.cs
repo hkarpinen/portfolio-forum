@@ -1,5 +1,4 @@
 using System.Text;
-using System.Threading.RateLimiting;
 using Forum.Application;
 using Client.Authorization;
 using Client.Extensions;
@@ -76,9 +75,6 @@ try
         options.AddPolicy(ForumAuthorizationPolicies.MemberOrAbove, policy =>
             policy.RequireAssertion(context => context.User.IsMemberOrAbove()));
 
-        options.AddPolicy(ForumAuthorizationPolicies.ModeratorOrAdmin, policy =>
-            policy.RequireAssertion(context => context.User.IsModeratorOrAdmin()));
-
         options.AddPolicy(ForumAuthorizationPolicies.AdminOnly, policy =>
             policy.RequireAssertion(context => context.User.IsAdmin()));
     });
@@ -116,13 +112,6 @@ try
             limiterOptions.PermitLimit = 20;
             limiterOptions.Window = TimeSpan.FromMinutes(1);
             limiterOptions.QueueLimit = 0;
-        });
-
-        options.AddConcurrencyLimiter("sse", limiterOptions =>
-        {
-            limiterOptions.PermitLimit = 100;
-            limiterOptions.QueueLimit = 0;
-            limiterOptions.QueueProcessingOrder = QueueProcessingOrder.OldestFirst;
         });
     });
 

@@ -1,8 +1,6 @@
 using Forum.Application.Contracts;
 using Forum.Application.Queries;
-using Forum.Domain.Aggregates;
 using Forum.Domain.Engines;
-using Forum.Domain.ReadModels;
 using Forum.Domain.ValueObjects;
 using Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -24,16 +22,12 @@ internal sealed class ThreadQuery : IThreadQuery
     {
         var communityId = new CommunityId(request.CommunityId);
         var query = _db.Threads.Where(t => t.CommunityId == communityId && t.DeletedAt == null);
-
         var total = await query.CountAsync(cancellationToken);
         var items = await query
             .OrderByDescending(t => t.CreatedAt)
             .Skip((request.Page - 1) * request.PageSize)
             .Take(request.PageSize)
             .ToListAsync(cancellationToken);
-
-        var threadIds = items.Select(t => t.Id.Value).ToList();
-        var scores = await GetScoresByTargetsAsync(VoteTargetType.Thread, threadIds, cancellationToken);
 
         var authorIds = items.Select(t => t.AuthorId).Distinct().ToList();
         var projections = await _db.UserProjections
@@ -44,7 +38,11 @@ internal sealed class ThreadQuery : IThreadQuery
         var responses = items.Select(t =>
         {
             projDict.TryGetValue(t.AuthorId, out var proj);
-            return Map(t, scores.GetValueOrDefault(t.Id.Value, 0), 0, proj);
+            var hotScore = _hotRankingEngine.CalculateHotScore(t.CreatedAt, t.VoteScore, 0);
+            return new ThreadSummaryResponse(
+                t.Id.Value, t.CommunityId.Value, t.AuthorId.Value,
+                proj?.EffectiveName, proj?.AvatarUrl, t.Title,
+                t.CreatedAt, hotScore, t.VoteScore);
         }).ToList();
 
         return new ThreadListResponse(responses, total);
@@ -55,47 +53,37 @@ internal sealed class ThreadQuery : IThreadQuery
         var thread = await _db.Threads.FirstOrDefaultAsync(t => t.Id == new ThreadId(request.ThreadId), cancellationToken);
         if (thread is null) return null;
 
-        var score = await GetScoreByTargetAsync(VoteTargetType.Thread, thread.Id.Value, cancellationToken);
         var proj = await _db.UserProjections.FirstOrDefaultAsync(p => p.Id == thread.AuthorId, cancellationToken);
-        return Map(thread, score, 0, proj);
-    }
-
-    private async Task<int> GetScoreByTargetAsync(VoteTargetType targetType, Guid targetId, CancellationToken cancellationToken)
-    {
-        var directions = await _db.Votes
-            .Where(v => v.TargetType == targetType && v.TargetId == targetId && v.RetractedAt == null)
-            .Select(v => v.Direction)
-            .ToListAsync(cancellationToken);
-        return directions.Sum(d => (int)d);
-    }
-
-    private async Task<Dictionary<Guid, int>> GetScoresByTargetsAsync(VoteTargetType targetType, IEnumerable<Guid> targetIds, CancellationToken cancellationToken)
-    {
-        var ids = targetIds.ToList();
-        var votes = await _db.Votes
-            .Where(v => v.TargetType == targetType && ids.Contains(v.TargetId) && v.RetractedAt == null)
-            .Select(v => new { v.TargetId, v.Direction })
-            .ToListAsync(cancellationToken);
-        return votes.GroupBy(v => v.TargetId).ToDictionary(g => g.Key, g => g.Sum(v => (int)v.Direction));
-    }
-
-    private ThreadResponse Map(ForumThread t, int score, int commentCount, UserProjection? proj)
-    {
-        var hotScore = _hotRankingEngine.CalculateHotScore(t.CreatedAt, score, commentCount);
+        var hotScore = _hotRankingEngine.CalculateHotScore(thread.CreatedAt, thread.VoteScore, 0);
         return new ThreadResponse(
-            t.Id.Value,
-            t.CommunityId.Value,
-            t.AuthorId.Value,
-            proj?.DisplayName ?? proj?.UserName,
-            proj?.AvatarUrl,
-            t.Title,
-            t.Content,
-            t.CreatedAt,
-            t.EditedAt,
-            t.IsLocked,
-            t.IsPinned,
-            t.DeletedAt,
-            hotScore,
-            score);
+            thread.Id.Value, thread.CommunityId.Value, thread.AuthorId.Value,
+            proj?.EffectiveName, proj?.AvatarUrl, thread.Title, thread.Content,
+            thread.CreatedAt, thread.EditedAt, thread.IsLocked, thread.IsPinned,
+            thread.DeletedAt, hotScore, thread.VoteScore);
+    }
+
+    public async Task<ThreadListResponse> ListByAuthorAsync(Guid authorId, int page, int pageSize, CancellationToken cancellationToken = default)
+    {
+        var authorUserId = new UserId(authorId);
+        var query = _db.Threads.Where(t => t.AuthorId == authorUserId && t.DeletedAt == null);
+
+        var total = await query.CountAsync(cancellationToken);
+        var items = await query
+            .OrderByDescending(t => t.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        var proj = await _db.UserProjections.FirstOrDefaultAsync(p => p.Id == authorUserId, cancellationToken);
+
+        var responses = items.Select(t =>
+        {
+            var hotScore = _hotRankingEngine.CalculateHotScore(t.CreatedAt, t.VoteScore, 0);
+            return new ThreadSummaryResponse(
+                t.Id.Value, t.CommunityId.Value, t.AuthorId.Value,
+                proj?.EffectiveName, proj?.AvatarUrl, t.Title,
+                t.CreatedAt, hotScore, t.VoteScore);
+        }).ToList();
+        return new ThreadListResponse(responses, total);
     }
 }

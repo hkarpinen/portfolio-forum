@@ -1,6 +1,6 @@
 namespace Forum.Application.Contracts;
 
-public sealed record CreateThreadRequest(Guid CommunityId, Guid AuthorId, string Title, string? Content);
+public sealed record CreateThreadRequest(Guid CommunityId, string CommunitySlug, Guid AuthorId, string Title, string? Content);
 public sealed record EditThreadRequest(Guid ThreadId, string Title, string? Content);
 public sealed record DeleteThreadRequest(Guid ThreadId);
 public sealed record LockThreadRequest(Guid ThreadId);
@@ -24,4 +24,22 @@ public sealed record ThreadResponse(
     double HotScore,
     int VoteScore);
 
-public sealed record ThreadListResponse(IReadOnlyCollection<ThreadResponse> Items, int TotalCount);
+public sealed record ThreadMutationResponse(
+    Guid ThreadId,
+    bool IsLocked,
+    bool IsPinned,
+    DateTime? EditedAt,
+    DateTime? DeletedAt);
+
+public sealed record ThreadSummaryResponse(
+    Guid ThreadId,
+    Guid CommunityId,
+    Guid AuthorId,
+    string? AuthorDisplayName,
+    string? AuthorAvatarUrl,
+    string Title,
+    DateTime CreatedAt,
+    double HotScore,
+    int VoteScore);
+
+public sealed record ThreadListResponse(IReadOnlyCollection<ThreadSummaryResponse> Items, int TotalCount);

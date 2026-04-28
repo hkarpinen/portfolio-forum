@@ -14,7 +14,6 @@ public sealed class CommunityMembership
     public UserId UserId { get; private set; }
     public CommunityRole Role { get; private set; }
     public DateTime JoinedAt { get; private set; }
-    public DateTime? LeftAt { get; private set; }
 
     private CommunityMembership() { }
 
@@ -30,15 +29,6 @@ public sealed class CommunityMembership
         };
         membership._domainEvents.Add(new MembershipJoined(membership.Id, communityId, userId, membership.JoinedAt));
         return membership;
-    }
-
-    public void Leave(DateTime leftAt)
-    {
-        if (LeftAt.HasValue)
-            throw new InvalidOperationException("Membership is already left.");
-
-        LeftAt = leftAt;
-        _domainEvents.Add(new MembershipLeft(Id, CommunityId, UserId, leftAt));
     }
 
     public void AppointModerator(DateTime appointedAt)

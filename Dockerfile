@@ -22,6 +22,6 @@ WORKDIR /app
 EXPOSE 8080
 ENV ASPNETCORE_URLS=http://+:8080
 COPY --from=publish /app/publish .
-RUN mkdir -p /app/uploads
+RUN mkdir -p /app/uploads /data/forum && chown -R $APP_UID:$APP_UID /data/forum
 USER $APP_UID
 ENTRYPOINT ["dotnet", "Client.dll"]

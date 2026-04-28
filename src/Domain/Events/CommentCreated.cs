@@ -7,5 +7,6 @@ public sealed record CommentCreated(
     ThreadId ThreadId,
     UserId AuthorId,
     string Content,
-    DateTime CreatedAt
+    DateTime CreatedAt,
+    CommentId? ParentCommentId = null
 );

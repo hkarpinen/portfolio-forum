@@ -1,6 +1,6 @@
 namespace Infrastructure.Media;
 
-internal interface IMediaStore
+public interface IMediaStore
 {
     Task<string> UploadAsync(
         Stream content,

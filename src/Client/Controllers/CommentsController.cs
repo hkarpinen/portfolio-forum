@@ -29,11 +29,11 @@ public sealed class CommentsController : ControllerBase
     [EnableRateLimiting("write")]
     public async Task<IActionResult> Create([FromBody] CreateCommentDto request, CancellationToken cancellationToken)
     {
-        var result = await _commentWorkflowManager.CreateAsync(
+        var commentId = await _commentWorkflowManager.CreateAsync(
             new CreateCommentRequest(request.ThreadId, User.GetRequiredUserId(), request.Content, request.ParentCommentId),
             cancellationToken);
 
-        return CreatedAtAction(nameof(ListTree), new { threadId = request.ThreadId }, result);
+        return CreatedAtAction(nameof(ListTree), new { threadId = request.ThreadId }, new { commentId });
     }
 
     [HttpPut("{commentId:guid}")]
@@ -41,8 +41,8 @@ public sealed class CommentsController : ControllerBase
     [EnableRateLimiting("write")]
     public async Task<IActionResult> Edit([FromRoute] Guid commentId, [FromBody] EditCommentDto request, CancellationToken cancellationToken)
     {
-        var result = await _commentWorkflowManager.EditAsync(new EditCommentRequest(commentId, request.Content), cancellationToken);
-        return result is null ? NotFound() : Ok(result);
+        var found = await _commentWorkflowManager.EditAsync(new EditCommentRequest(commentId, request.Content), cancellationToken);
+        return found ? Ok() : NotFound();
     }
 
     [HttpDelete("{commentId:guid}")]
@@ -50,8 +50,8 @@ public sealed class CommentsController : ControllerBase
     [EnableRateLimiting("write")]
     public async Task<IActionResult> Delete([FromRoute] Guid commentId, CancellationToken cancellationToken)
     {
-        var result = await _commentWorkflowManager.DeleteAsync(new DeleteCommentRequest(commentId), cancellationToken);
-        return result is null ? NotFound() : NoContent();
+        var found = await _commentWorkflowManager.DeleteAsync(new DeleteCommentRequest(commentId), cancellationToken);
+        return found ? NoContent() : NotFound();
     }
 
     [HttpGet("thread/{threadId:guid}")]

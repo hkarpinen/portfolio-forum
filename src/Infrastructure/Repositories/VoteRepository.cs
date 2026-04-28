@@ -22,7 +22,7 @@ internal sealed class VoteRepository : IVoteRepository
     public Task<Vote?> GetByUserAndTargetAsync(UserId userId, VoteTargetType targetType, Guid targetId, CancellationToken cancellationToken = default)
         => _dbContext.Votes
             .FirstOrDefaultAsync(
-                x => x.UserId == userId && x.TargetType == targetType && x.TargetId == targetId && x.RetractedAt == null,
+                x => x.UserId == userId && x.TargetType == targetType && x.TargetId == targetId,
                 cancellationToken);
 
     public async Task AddAsync(Vote vote, CancellationToken cancellationToken = default)

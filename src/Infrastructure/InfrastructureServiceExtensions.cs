@@ -1,6 +1,7 @@
 using Forum.Application.Queries;
 using Forum.Domain.Repositories;
 using Infrastructure.Media;
+using Infrastructure.Messaging;
 using Infrastructure.Messaging.Consumers;
 using Infrastructure.Persistence;
 using Infrastructure.Queries;
@@ -76,6 +77,8 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<IModerationQuery, ModerationQuery>();
 
         services.AddSingleton<IMediaStore, LocalFileSystemMediaStore>();
+
+        services.AddHostedService<OutboxPublisher>();
 
         return services;
     }

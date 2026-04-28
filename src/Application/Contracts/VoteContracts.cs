@@ -13,5 +13,4 @@ public sealed record VoteResponse(
     Guid UserId,
     VoteDirection Direction,
     DateTime CastAt,
-    DateTime? RetractedAt,
     int CalculatedScore);

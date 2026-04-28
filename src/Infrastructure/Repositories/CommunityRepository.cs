@@ -19,19 +19,27 @@ internal sealed class CommunityRepository : ICommunityRepository
         => _dbContext.Communities
             .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
 
-    public Task<Community?> GetByNameAsync(string name, CancellationToken cancellationToken = default)
+    public Task<Community?> GetBySlugAsync(string slug, CancellationToken cancellationToken = default)
         => _dbContext.Communities
-            .FirstOrDefaultAsync(x => x.Name.ToLower() == name.ToLower(), cancellationToken);
+            .FirstOrDefaultAsync(x => x.Slug == slug, cancellationToken);
+
+    public Task<bool> SlugExistsAsync(string slug, CancellationToken cancellationToken = default)
+        => _dbContext.Communities
+            .AnyAsync(x => x.Slug == slug, cancellationToken);
 
     public async Task AddAsync(Community community, CancellationToken cancellationToken = default)
     {
         await _dbContext.Communities.AddAsync(community, cancellationToken);
+        foreach (var e in community.DomainEvents) _dbContext.AddToOutbox(e);
+        community.ClearDomainEvents();
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
     public async Task UpdateAsync(Community community, CancellationToken cancellationToken = default)
     {
         _dbContext.Communities.Update(community);
+        foreach (var e in community.DomainEvents) _dbContext.AddToOutbox(e);
+        community.ClearDomainEvents();
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 

@@ -22,12 +22,16 @@ internal sealed class CommentRepository : ICommentRepository
     public async Task AddAsync(Comment comment, CancellationToken cancellationToken = default)
     {
         await _dbContext.Comments.AddAsync(comment, cancellationToken);
+        foreach (var e in comment.DomainEvents) _dbContext.AddToOutbox(e);
+        comment.ClearDomainEvents();
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
     public async Task UpdateAsync(Comment comment, CancellationToken cancellationToken = default)
     {
         _dbContext.Comments.Update(comment);
+        foreach (var e in comment.DomainEvents) _dbContext.AddToOutbox(e);
+        comment.ClearDomainEvents();
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 

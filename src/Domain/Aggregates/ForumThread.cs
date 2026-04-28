@@ -19,10 +19,11 @@ public sealed class ForumThread
     public bool IsLocked { get; private set; }
     public bool IsPinned { get; private set; }
     public DateTime? DeletedAt { get; private set; }
+    public int VoteScore { get; private set; }
 
     private ForumThread() { }
 
-    public static ForumThread Create(CommunityId communityId, UserId authorId, string title, string? content)
+    public static ForumThread Create(CommunityId communityId, string communitySlug, UserId authorId, string title, string? content)
     {
         if (string.IsNullOrWhiteSpace(title))
             throw new ArgumentException("Title cannot be empty.", nameof(title));
@@ -36,7 +37,7 @@ public sealed class ForumThread
             Content = content,
             CreatedAt = DateTime.UtcNow
         };
-        thread._domainEvents.Add(new ThreadCreated(thread.Id, communityId, authorId, title, thread.CreatedAt));
+        thread._domainEvents.Add(new ThreadCreated(thread.Id, communityId, communitySlug, authorId, title, thread.CreatedAt));
         return thread;
     }
 
@@ -80,6 +81,11 @@ public sealed class ForumThread
 
         IsPinned = true;
         _domainEvents.Add(new ThreadPinned(Id, pinnedAt));
+    }
+
+    public void AdjustVoteScore(int delta)
+    {
+        VoteScore += delta;
     }
 }
 

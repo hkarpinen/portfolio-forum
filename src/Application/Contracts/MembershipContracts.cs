@@ -14,5 +14,4 @@ public sealed record MembershipResponse(
     Guid UserId,
     CommunityRole Role,
     DateTime JoinedAt,
-    DateTime? LeftAt,
     bool IsInvite);

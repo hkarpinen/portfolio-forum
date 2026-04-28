@@ -15,14 +15,17 @@ internal sealed class ForumProfileQuery : IForumProfileQuery
 
     public async Task<ForumProfileResponse?> GetAsync(GetForumProfileRequest request, CancellationToken cancellationToken = default)
     {
-        var profile = await _db.ForumProfiles.FirstOrDefaultAsync(p => p.UserId == new UserId(request.UserId), cancellationToken);
-        return profile is null ? null : Map(profile);
+        var userId = new UserId(request.UserId);
+        var profile = await _db.ForumProfiles.FirstOrDefaultAsync(p => p.UserId == userId, cancellationToken);
+        var proj = await _db.UserProjections.FirstOrDefaultAsync(p => p.Id == userId, cancellationToken);
+        if (profile is null && proj is null) return null;
+        return new ForumProfileResponse(
+            request.UserId,
+            proj?.EffectiveName,
+            proj?.AvatarUrl,
+            profile?.Bio,
+            profile?.Signature,
+            profile?.CreatedAt ?? DateTime.UtcNow,
+            profile?.UpdatedAt);
     }
-
-    private static ForumProfileResponse Map(ForumProfile p) => new(
-        p.UserId.Value,
-        p.Bio,
-        p.Signature,
-        p.CreatedAt,
-        p.UpdatedAt);
 }

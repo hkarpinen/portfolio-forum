@@ -26,12 +26,16 @@ internal sealed class MembershipRepository : IMembershipRepository
     public async Task AddAsync(CommunityMembership membership, CancellationToken cancellationToken = default)
     {
         await _dbContext.Memberships.AddAsync(membership, cancellationToken);
+        foreach (var e in membership.DomainEvents) _dbContext.AddToOutbox(e);
+        membership.ClearDomainEvents();
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
     public async Task UpdateAsync(CommunityMembership membership, CancellationToken cancellationToken = default)
     {
         _dbContext.Memberships.Update(membership);
+        foreach (var e in membership.DomainEvents) _dbContext.AddToOutbox(e);
+        membership.ClearDomainEvents();
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 

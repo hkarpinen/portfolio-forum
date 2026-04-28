@@ -15,7 +15,20 @@ public sealed record CommentResponse(
     DateTime CreatedAt,
     DateTime? EditedAt,
     DateTime? DeletedAt,
-    Guid? ParentCommentId);
+    Guid? ParentCommentId,
+    int VoteScore);
 
 public sealed record CommentTreeNodeResponse(CommentResponse Comment, IReadOnlyCollection<CommentTreeNodeResponse> Children);
 public sealed record CommentTreeResponse(IReadOnlyCollection<CommentTreeNodeResponse> RootComments);
+
+public sealed record ProfileCommentSummaryResponse(
+    Guid CommentId,
+    Guid ThreadId,
+    string ThreadTitle,
+    string CommunitySlug,
+    string CommunityName,
+    string Content,
+    DateTime CreatedAt,
+    int VoteScore);
+
+public sealed record ProfileCommentListResponse(IReadOnlyCollection<ProfileCommentSummaryResponse> Items, int TotalCount);

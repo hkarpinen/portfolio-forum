@@ -22,6 +22,8 @@ internal sealed class ModerationLogRepository : IModerationLogRepository
     public async Task AddAsync(ModerationLog log, CancellationToken cancellationToken = default)
     {
         await _dbContext.ModerationLogs.AddAsync(log, cancellationToken);
+        foreach (var e in log.DomainEvents) _dbContext.AddToOutbox(e);
+        log.ClearDomainEvents();
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 }

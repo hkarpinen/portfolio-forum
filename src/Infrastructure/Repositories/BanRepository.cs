@@ -22,17 +22,15 @@ internal sealed class BanRepository : IBanRepository
     public async Task AddAsync(CommunityBan ban, CancellationToken cancellationToken = default)
     {
         await _dbContext.Bans.AddAsync(ban, cancellationToken);
+        foreach (var e in ban.DomainEvents) _dbContext.AddToOutbox(e);
+        ban.ClearDomainEvents();
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task RemoveAsync(BanId id, CancellationToken cancellationToken = default)
+    public async Task RemoveAsync(CommunityBan ban, CancellationToken cancellationToken = default)
     {
-        var ban = await _dbContext.Bans.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
-        if (ban is null)
-        {
-            return;
-        }
-
+        foreach (var e in ban.DomainEvents) _dbContext.AddToOutbox(e);
+        ban.ClearDomainEvents();
         _dbContext.Bans.Remove(ban);
         await _dbContext.SaveChangesAsync(cancellationToken);
     }

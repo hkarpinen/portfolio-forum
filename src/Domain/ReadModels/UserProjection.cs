@@ -12,6 +12,9 @@ public sealed class UserProjection
     public string UserName { get; set; } = string.Empty;
     public string? DisplayName { get; set; }
     public string? AvatarUrl { get; set; }
+
+    /// <summary>Returns DisplayName if set, otherwise falls back to UserName. Use this everywhere instead of the scattered <c>DisplayName ?? UserName</c> pattern.</summary>
+    public string EffectiveName => DisplayName ?? UserName;
     public DateTime RegisteredAt { get; set; }
     public bool IsBanned { get; set; }
 

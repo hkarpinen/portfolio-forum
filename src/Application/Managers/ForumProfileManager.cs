@@ -36,6 +36,8 @@ internal sealed class ForumProfileManager : IForumProfileManager
     private static ForumProfileResponse Map(ForumProfile profile)
         => new(
             profile.UserId.Value,
+            null,
+            null,
             profile.Bio,
             profile.Signature,
             profile.CreatedAt,

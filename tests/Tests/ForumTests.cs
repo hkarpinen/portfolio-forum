@@ -311,7 +311,7 @@ public class CommunityTests
 {
     private static Community CreateCommunity(string name = "TestCommunity")
     {
-        return Community.Create(name, CommunityVisibility.Public, new UserId(Guid.NewGuid()));
+        return Community.Create(name, Community.Slugify(name), CommunityVisibility.Public, new UserId(Guid.NewGuid()));
     }
 
     [Fact]
@@ -321,10 +321,11 @@ public class CommunityTests
         var ownerId = new UserId(Guid.NewGuid());
 
         // Act
-        var community = Community.Create("TestCom", CommunityVisibility.Public, ownerId);
+        var community = Community.Create("TestCom", "testcom", CommunityVisibility.Public, ownerId);
 
         // Assert
         Assert.Equal("TestCom", community.Name);
+        Assert.Equal("testcom", community.Slug);
         Assert.Equal(CommunityVisibility.Public, community.Visibility);
         Assert.Equal(ownerId, community.OwnerId);
     }
@@ -333,7 +334,7 @@ public class CommunityTests
     public void Create_EmptyName_ShouldThrow()
     {
         Assert.Throws<ArgumentException>(() =>
-            Community.Create("  ", CommunityVisibility.Public, new UserId(Guid.NewGuid())));
+            Community.Create("  ", "slug", CommunityVisibility.Public, new UserId(Guid.NewGuid())));
     }
 
     [Fact]
@@ -354,10 +355,11 @@ public class CommunityTests
         var community = CreateCommunity();
 
         // Act
-        community.Update("NewName", CommunityVisibility.Private, DateTime.UtcNow);
+        community.Update("NewName", "newname", CommunityVisibility.Private, DateTime.UtcNow);
 
         // Assert
         Assert.Equal("NewName", community.Name);
+        Assert.Equal("newname", community.Slug);
         Assert.Equal(CommunityVisibility.Private, community.Visibility);
     }
 
@@ -368,7 +370,7 @@ public class CommunityTests
         var community = CreateCommunity();
 
         // Act
-        community.Update("NewName", CommunityVisibility.Restricted, DateTime.UtcNow);
+        community.Update("NewName", "newname", CommunityVisibility.Restricted, DateTime.UtcNow);
 
         // Assert
         Assert.Contains(community.DomainEvents, e => e is CommunityUpdated);
@@ -595,7 +597,6 @@ public class VoteTests
         Assert.Equal(targetId, vote.TargetId);
         Assert.Equal(userId, vote.UserId);
         Assert.Equal(VoteDirection.Downvote, vote.Direction);
-        Assert.Null(vote.RetractedAt);
     }
 
     [Fact]
@@ -604,31 +605,6 @@ public class VoteTests
         var vote = CreateVote();
         Assert.Single(vote.DomainEvents);
         Assert.IsType<VoteCast>(vote.DomainEvents.First());
-    }
-
-    [Fact]
-    public void Retract_ShouldSetRetractedAt()
-    {
-        var vote = CreateVote();
-        var retractedAt = DateTime.UtcNow.AddMinutes(10);
-        vote.Retract(retractedAt);
-        Assert.Equal(retractedAt, vote.RetractedAt);
-    }
-
-    [Fact]
-    public void Retract_ShouldRaise_VoteRetractedEvent()
-    {
-        var vote = CreateVote();
-        vote.Retract(DateTime.UtcNow);
-        Assert.Contains(vote.DomainEvents, e => e is VoteRetracted);
-    }
-
-    [Fact]
-    public void Retract_WhenAlreadyRetracted_ShouldThrow()
-    {
-        var vote = CreateVote();
-        vote.Retract(DateTime.UtcNow);
-        Assert.Throws<InvalidOperationException>(() => vote.Retract(DateTime.UtcNow));
     }
 
     [Fact]
@@ -674,7 +650,6 @@ public class CommunityMembershipTests
         Assert.Equal(communityId, membership.CommunityId);
         Assert.Equal(userId, membership.UserId);
         Assert.Equal(CommunityRole.Member, membership.Role);
-        Assert.Null(membership.LeftAt);
     }
 
     [Fact]
@@ -683,24 +658,6 @@ public class CommunityMembershipTests
         var membership = CreateMembership();
         Assert.Single(membership.DomainEvents);
         Assert.IsType<MembershipJoined>(membership.DomainEvents.First());
-    }
-
-    [Fact]
-    public void Leave_ShouldSetLeftAt_AndRaiseEvent()
-    {
-        var membership = CreateMembership();
-        var leftAt = DateTime.UtcNow;
-        membership.Leave(leftAt);
-        Assert.Equal(leftAt, membership.LeftAt);
-        Assert.Contains(membership.DomainEvents, e => e is MembershipLeft);
-    }
-
-    [Fact]
-    public void Leave_WhenAlreadyLeft_ShouldThrow()
-    {
-        var membership = CreateMembership();
-        membership.Leave(DateTime.UtcNow);
-        Assert.Throws<InvalidOperationException>(() => membership.Leave(DateTime.UtcNow));
     }
 
     [Fact]

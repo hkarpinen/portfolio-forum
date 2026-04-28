@@ -15,7 +15,6 @@ public sealed class Vote
     public UserId UserId { get; private set; }
     public VoteDirection Direction { get; private set; }
     public DateTime CastAt { get; private set; }
-    public DateTime? RetractedAt { get; private set; }
 
     private Vote() { }
 
@@ -32,15 +31,6 @@ public sealed class Vote
         };
         vote._domainEvents.Add(new VoteCast(vote.Id, targetType, targetId, userId, direction, vote.CastAt));
         return vote;
-    }
-
-    public void Retract(DateTime retractedAt)
-    {
-        if (RetractedAt.HasValue)
-            throw new InvalidOperationException("Vote is already retracted.");
-
-        RetractedAt = retractedAt;
-        _domainEvents.Add(new VoteRetracted(Id, TargetType, TargetId, UserId, retractedAt));
     }
 
     public void SwitchDirection(VoteDirection newDirection, DateTime switchedAt)

@@ -8,10 +8,17 @@ namespace Forum.Application.Managers;
 internal sealed class VoteManager : IVoteManager
 {
     private readonly IVoteRepository _voteRepository;
+    private readonly IThreadRepository _threadRepository;
+    private readonly ICommentRepository _commentRepository;
 
-    public VoteManager(IVoteRepository voteRepository)
+    public VoteManager(
+        IVoteRepository voteRepository,
+        IThreadRepository threadRepository,
+        ICommentRepository commentRepository)
     {
         _voteRepository = voteRepository;
+        _threadRepository = threadRepository;
+        _commentRepository = commentRepository;
     }
 
     public async Task<VoteResponse> CastAsync(CastVoteRequest request, CancellationToken cancellationToken = default)
@@ -21,62 +28,79 @@ internal sealed class VoteManager : IVoteManager
 
         if (existing is not null)
         {
-            if (existing.Direction != request.Direction)
-            {
-                existing.SwitchDirection(request.Direction, DateTime.UtcNow);
-                await _voteRepository.UpdateAsync(existing, cancellationToken);
-            }
+            if (existing.Direction == request.Direction)
+                return Map(existing);
+
+            var delta = (int)request.Direction - (int)existing.Direction;
+            existing.SwitchDirection(request.Direction, DateTime.UtcNow);
+            await _voteRepository.UpdateAsync(existing, cancellationToken);
+            await AdjustTargetScoreAsync(request.TargetType, request.TargetId, delta, cancellationToken);
             return Map(existing);
         }
 
         var vote = Vote.Create(request.TargetType, request.TargetId, new UserId(request.UserId), request.Direction);
-
         await _voteRepository.AddAsync(vote, cancellationToken);
+        await AdjustTargetScoreAsync(request.TargetType, request.TargetId, (int)request.Direction, cancellationToken);
         return Map(vote);
     }
 
     public async Task<VoteResponse?> SwitchAsync(SwitchVoteRequest request, CancellationToken cancellationToken = default)
     {
         var vote = await _voteRepository.GetByIdAsync(new VoteId(request.VoteId), cancellationToken);
-
         if (vote is null)
-        {
             return null;
-        }
 
+        var delta = (int)request.Direction - (int)vote.Direction;
         vote.SwitchDirection(request.Direction, DateTime.UtcNow);
         await _voteRepository.UpdateAsync(vote, cancellationToken);
+        await AdjustTargetScoreAsync(vote.TargetType, vote.TargetId, delta, cancellationToken);
         return Map(vote);
     }
 
     public async Task<VoteResponse?> RetractAsync(RetractVoteRequest request, CancellationToken cancellationToken = default)
     {
         var vote = await _voteRepository.GetByIdAsync(new VoteId(request.VoteId), cancellationToken);
-
         if (vote is null)
-        {
             return null;
-        }
 
-        vote.Retract(DateTime.UtcNow);
+        var response = Map(vote);
         await _voteRepository.RemoveAsync(vote.Id, cancellationToken);
-        return Map(vote);
+        await AdjustTargetScoreAsync(vote.TargetType, vote.TargetId, -(int)vote.Direction, cancellationToken);
+        return response;
     }
 
-    private static VoteResponse Map(Vote vote)
+    private async Task AdjustTargetScoreAsync(VoteTargetType targetType, Guid targetId, int delta, CancellationToken cancellationToken)
     {
-        var upvotes = vote.Direction == VoteDirection.Upvote && vote.RetractedAt is null ? 1 : 0;
-        var downvotes = vote.Direction == VoteDirection.Downvote && vote.RetractedAt is null ? 1 : 0;
-        var calculatedScore = upvotes - downvotes;
+        if (delta == 0) return;
 
-        return new VoteResponse(
+        if (targetType == VoteTargetType.Thread)
+        {
+            var thread = await _threadRepository.GetByIdAsync(new ThreadId(targetId), cancellationToken);
+            if (thread is not null)
+            {
+                thread.AdjustVoteScore(delta);
+                await _threadRepository.UpdateAsync(thread, cancellationToken);
+            }
+        }
+        else
+        {
+            var comment = await _commentRepository.GetByIdAsync(new CommentId(targetId), cancellationToken);
+            if (comment is not null)
+            {
+                comment.AdjustVoteScore(delta);
+                await _commentRepository.UpdateAsync(comment, cancellationToken);
+            }
+        }
+    }
+
+    private static VoteResponse Map(Vote vote) =>
+        new(
             vote.Id.Value,
             vote.TargetType,
             vote.TargetId,
             vote.UserId.Value,
             vote.Direction,
             vote.CastAt,
-            vote.RetractedAt,
-            calculatedScore);
-    }
+            (int)vote.Direction);
 }
+

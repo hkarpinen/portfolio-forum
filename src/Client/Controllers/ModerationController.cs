@@ -12,7 +12,7 @@ namespace Client.Controllers;
 [ApiController]
 [Route("api/forum/moderation")]
 [EnableRateLimiting("standard")]
-[Authorize(Policy = ForumAuthorizationPolicies.ModeratorOrAdmin)]
+[Authorize(Policy = ForumAuthorizationPolicies.MemberOrAbove)]
 public sealed class ModerationController : ControllerBase
 {
     private readonly IModerationManager _moderationManager;

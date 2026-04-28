@@ -46,7 +46,7 @@ internal sealed class ModerationManager : IModerationManager
         }
 
         ban.Unban(DateTime.UtcNow);
-        await _banRepository.RemoveAsync(ban.Id, cancellationToken);
+        await _banRepository.RemoveAsync(ban, cancellationToken);
 
         var log = ModerationLog.Create(
             ban.CommunityId,

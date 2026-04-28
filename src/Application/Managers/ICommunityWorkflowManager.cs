@@ -7,4 +7,5 @@ public interface ICommunityWorkflowManager
     Task<CommunityResponse> CreateAsync(CreateCommunityRequest request, CancellationToken cancellationToken = default);
     Task<CommunityResponse?> UpdateAsync(UpdateCommunityRequest request, CancellationToken cancellationToken = default);
     Task<CommunityResponse?> TransferOwnershipAsync(TransferCommunityOwnershipRequest request, CancellationToken cancellationToken = default);
+    Task<bool> DeleteAsync(DeleteCommunityRequest request, CancellationToken cancellationToken = default);
 }

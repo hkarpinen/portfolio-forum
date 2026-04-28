@@ -22,12 +22,16 @@ internal sealed class ThreadRepository : IThreadRepository
     public async Task AddAsync(ForumThread thread, CancellationToken cancellationToken = default)
     {
         await _dbContext.Threads.AddAsync(thread, cancellationToken);
+        foreach (var e in thread.DomainEvents) _dbContext.AddToOutbox(e);
+        thread.ClearDomainEvents();
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
     public async Task UpdateAsync(ForumThread thread, CancellationToken cancellationToken = default)
     {
         _dbContext.Threads.Update(thread);
+        foreach (var e in thread.DomainEvents) _dbContext.AddToOutbox(e);
+        thread.ClearDomainEvents();
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
