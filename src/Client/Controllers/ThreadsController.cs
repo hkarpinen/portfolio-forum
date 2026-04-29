@@ -59,6 +59,14 @@ public sealed class ThreadsController : ControllerBase
         return Ok(result);
     }
 
+    [HttpGet("feed")]
+    [AllowAnonymous]
+    public async Task<IActionResult> Feed([FromQuery] string sort = "new", [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken cancellationToken = default)
+    {
+        var result = await _threadQuery.ListFeedAsync(new FeedRequest(sort, page, pageSize), cancellationToken);
+        return Ok(result);
+    }
+
     [HttpGet("{id:guid}")]
     [AllowAnonymous]
     public async Task<IActionResult> GetById([FromRoute] Guid id, CancellationToken cancellationToken)

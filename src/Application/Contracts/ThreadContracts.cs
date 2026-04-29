@@ -43,3 +43,22 @@ public sealed record ThreadSummaryResponse(
     int VoteScore);
 
 public sealed record ThreadListResponse(IReadOnlyCollection<ThreadSummaryResponse> Items, int TotalCount);
+
+public sealed record FeedRequest(string Sort = "new", int Page = 1, int PageSize = 20);
+
+public sealed record FeedThreadSummaryResponse(
+    Guid ThreadId,
+    Guid CommunityId,
+    string? CommunitySlug,
+    string? CommunityName,
+    Guid AuthorId,
+    string? AuthorDisplayName,
+    string? AuthorAvatarUrl,
+    string Title,
+    DateTime CreatedAt,
+    double HotScore,
+    int VoteScore,
+    int CommentCount,
+    bool IsPinned);
+
+public sealed record FeedListResponse(IReadOnlyCollection<FeedThreadSummaryResponse> Items, int TotalCount);
