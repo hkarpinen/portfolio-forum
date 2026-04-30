@@ -1,4 +1,5 @@
 using Forum.Application.Contracts;
+using Forum.Application.Mappers;
 using Forum.Domain.Aggregates;
 using Forum.Domain.Repositories;
 using Forum.Domain.ValueObjects;
@@ -37,7 +38,7 @@ internal sealed class CommunityWorkflowManager : ICommunityWorkflowManager
             CommunityRole.Owner);
         await _membershipRepository.AddAsync(ownerMembership, cancellationToken);
 
-        return Map(community);
+        return CommunityMapper.ToResponse(community);
     }
 
     public async Task<CommunityResponse?> UpdateAsync(UpdateCommunityRequest request, CancellationToken cancellationToken = default)
@@ -66,7 +67,7 @@ internal sealed class CommunityWorkflowManager : ICommunityWorkflowManager
 
         community.Update(request.Name, slug, request.Visibility, DateTime.UtcNow, request.Description, request.ImageUrl);
         await _communityRepository.UpdateAsync(community, cancellationToken);
-        return Map(community);
+        return CommunityMapper.ToResponse(community);
     }
 
     public async Task<CommunityResponse?> TransferOwnershipAsync(TransferCommunityOwnershipRequest request, CancellationToken cancellationToken = default)
@@ -79,7 +80,7 @@ internal sealed class CommunityWorkflowManager : ICommunityWorkflowManager
 
         community.TransferOwnership(new UserId(request.NewOwnerId), DateTime.UtcNow);
         await _communityRepository.UpdateAsync(community, cancellationToken);
-        return Map(community);
+        return CommunityMapper.ToResponse(community);
     }
 
     public async Task<bool> DeleteAsync(DeleteCommunityRequest request, CancellationToken cancellationToken = default)
@@ -98,18 +99,6 @@ internal sealed class CommunityWorkflowManager : ICommunityWorkflowManager
         await _communityRepository.DeleteAsync(communityId, cancellationToken);
         return true;
     }
-
-    private static CommunityResponse Map(Community community)
-        => new(
-            community.Id.Value,
-            community.Slug,
-            community.Name,
-            community.Description,
-            community.ImageUrl,
-            community.Visibility,
-            community.OwnerId.Value,
-            community.CreatedAt,
-            community.UpdatedAt);
 
     private async Task<string> ResolveUniqueSlugAsync(string name, CommunityId? existingCommunityId, CancellationToken cancellationToken)
     {

@@ -1,4 +1,5 @@
 using Forum.Application.Contracts;
+using Forum.Application.Mappers;
 using Forum.Domain.Aggregates;
 using Forum.Domain.Repositories;
 using Forum.Domain.ValueObjects;
@@ -20,14 +21,14 @@ internal sealed class MembershipManager : IMembershipManager
             new UserId(request.UserId), new CommunityId(request.CommunityId), cancellationToken);
 
         if (existing is not null)
-            return Map(existing, isInvite: false);
+            return ForumMembershipMapper.ToResponse(existing, isInvite: false);
 
         var membership = CommunityMembership.Create(
             new CommunityId(request.CommunityId),
             new UserId(request.UserId));
 
         await _membershipRepository.AddAsync(membership, cancellationToken);
-        return Map(membership, isInvite: false);
+        return ForumMembershipMapper.ToResponse(membership, isInvite: false);
     }
 
     public async Task<MembershipResponse> InviteAsync(InviteMemberRequest request, CancellationToken cancellationToken = default)
@@ -37,7 +38,7 @@ internal sealed class MembershipManager : IMembershipManager
             new UserId(request.UserId));
 
         await _membershipRepository.AddAsync(membership, cancellationToken);
-        return Map(membership, isInvite: true);
+        return ForumMembershipMapper.ToResponse(membership, isInvite: true);
     }
 
     public async Task<MembershipResponse?> LeaveAsync(LeaveCommunityRequest request, CancellationToken cancellationToken = default)
@@ -47,7 +48,7 @@ internal sealed class MembershipManager : IMembershipManager
             return null;
 
         // Capture response before hard-deleting the row
-        var response = Map(membership, isInvite: false);
+        var response = ForumMembershipMapper.ToResponse(membership, isInvite: false);
         await _membershipRepository.DeleteAsync(membership.Id, cancellationToken);
         return response;
     }
@@ -63,7 +64,7 @@ internal sealed class MembershipManager : IMembershipManager
 
         membership.AppointModerator(DateTime.UtcNow);
         await _membershipRepository.UpdateAsync(membership, cancellationToken);
-        return Map(membership, isInvite: false);
+        return ForumMembershipMapper.ToResponse(membership, isInvite: false);
     }
 
     public async Task<MembershipResponse?> RemoveModeratorAsync(RemoveModeratorRequest request, CancellationToken cancellationToken = default)
@@ -77,15 +78,6 @@ internal sealed class MembershipManager : IMembershipManager
 
         membership.RemoveModerator(DateTime.UtcNow);
         await _membershipRepository.UpdateAsync(membership, cancellationToken);
-        return Map(membership, isInvite: false);
+        return ForumMembershipMapper.ToResponse(membership, isInvite: false);
     }
-
-    private static MembershipResponse Map(CommunityMembership membership, bool isInvite)
-        => new(
-            membership.Id.Value,
-            membership.CommunityId.Value,
-            membership.UserId.Value,
-            membership.Role,
-            membership.JoinedAt,
-            isInvite);
 }

@@ -1,4 +1,5 @@
 using Forum.Application.Contracts;
+using Forum.Application.Mappers;
 using Forum.Domain.Aggregates;
 using Forum.Domain.Repositories;
 using Forum.Domain.ValueObjects;
@@ -29,19 +30,19 @@ internal sealed class VoteManager : IVoteManager
         if (existing is not null)
         {
             if (existing.Direction == request.Direction)
-                return Map(existing);
+                return VoteMapper.ToResponse(existing);
 
             var delta = (int)request.Direction - (int)existing.Direction;
             existing.SwitchDirection(request.Direction, DateTime.UtcNow);
             await _voteRepository.UpdateAsync(existing, cancellationToken);
             await AdjustTargetScoreAsync(request.TargetType, request.TargetId, delta, cancellationToken);
-            return Map(existing);
+            return VoteMapper.ToResponse(existing);
         }
 
         var vote = Vote.Create(request.TargetType, request.TargetId, new UserId(request.UserId), request.Direction);
         await _voteRepository.AddAsync(vote, cancellationToken);
         await AdjustTargetScoreAsync(request.TargetType, request.TargetId, (int)request.Direction, cancellationToken);
-        return Map(vote);
+        return VoteMapper.ToResponse(vote);
     }
 
     public async Task<VoteResponse?> SwitchAsync(SwitchVoteRequest request, CancellationToken cancellationToken = default)
@@ -54,7 +55,7 @@ internal sealed class VoteManager : IVoteManager
         vote.SwitchDirection(request.Direction, DateTime.UtcNow);
         await _voteRepository.UpdateAsync(vote, cancellationToken);
         await AdjustTargetScoreAsync(vote.TargetType, vote.TargetId, delta, cancellationToken);
-        return Map(vote);
+        return VoteMapper.ToResponse(vote);
     }
 
     public async Task<VoteResponse?> RetractAsync(RetractVoteRequest request, CancellationToken cancellationToken = default)
@@ -63,7 +64,7 @@ internal sealed class VoteManager : IVoteManager
         if (vote is null)
             return null;
 
-        var response = Map(vote);
+        var response = VoteMapper.ToResponse(vote);
         await _voteRepository.RemoveAsync(vote.Id, cancellationToken);
         await AdjustTargetScoreAsync(vote.TargetType, vote.TargetId, -(int)vote.Direction, cancellationToken);
         return response;
@@ -93,14 +94,5 @@ internal sealed class VoteManager : IVoteManager
         }
     }
 
-    private static VoteResponse Map(Vote vote) =>
-        new(
-            vote.Id.Value,
-            vote.TargetType,
-            vote.TargetId,
-            vote.UserId.Value,
-            vote.Direction,
-            vote.CastAt,
-            (int)vote.Direction);
 }
 

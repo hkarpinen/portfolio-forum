@@ -1,4 +1,5 @@
 using Forum.Application.Contracts;
+using Forum.Application.Mappers;
 using Forum.Application.Queries;
 using Forum.Domain.ValueObjects;
 using Infrastructure.Persistence;
@@ -32,7 +33,7 @@ internal sealed class CommentQuery : ICommentQuery
             c =>
             {
                 projDict.TryGetValue(c.AuthorId, out var proj);
-                return (response: Map(c, proj, c.VoteScore), children: new List<CommentTreeNodeResponse>());
+                return (response: CommentMapper.ToResponse(c, proj, c.VoteScore), children: new List<CommentTreeNodeResponse>());
             });
 
         // Wire children into their parents; collect root-level comments
@@ -101,17 +102,4 @@ internal sealed class CommentQuery : ICommentQuery
 
         return new ProfileCommentListResponse(items, total);
     }
-
-    private static CommentResponse Map(Forum.Domain.Aggregates.Comment comment, Forum.Domain.ReadModels.UserProjection? proj, int voteScore) => new(
-        comment.Id.Value,
-        comment.ThreadId.Value,
-        comment.AuthorId.Value,
-        proj?.EffectiveName,
-        proj?.AvatarUrl,
-        comment.Content,
-        comment.CreatedAt,
-        comment.EditedAt,
-        comment.DeletedAt,
-        comment.ParentCommentId?.Value,
-        voteScore);
 }

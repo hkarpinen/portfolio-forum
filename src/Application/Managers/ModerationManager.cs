@@ -1,4 +1,5 @@
 using Forum.Application.Contracts;
+using Forum.Application.Mappers;
 using Forum.Domain.Aggregates;
 using Forum.Domain.Repositories;
 using Forum.Domain.ValueObjects;
@@ -33,7 +34,7 @@ internal sealed class ModerationManager : IModerationManager
             request.Reason);
 
         await _moderationLogRepository.AddAsync(log, cancellationToken);
-        return Map(ban);
+        return ModerationMapper.ToResponse(ban);
     }
 
     public async Task<BanResponse?> UnbanAsync(UnbanUserRequest request, CancellationToken cancellationToken = default)
@@ -56,7 +57,7 @@ internal sealed class ModerationManager : IModerationManager
             null);
 
         await _moderationLogRepository.AddAsync(log, cancellationToken);
-        return Map(ban);
+        return ModerationMapper.ToResponse(ban);
     }
 
     public async Task<ModerationLogEntryResponse> LogAsync(LogModerationActionRequest request, CancellationToken cancellationToken = default)
@@ -73,25 +74,6 @@ internal sealed class ModerationManager : IModerationManager
             request.TargetContent);
 
         await _moderationLogRepository.AddAsync(log, cancellationToken);
-        return Map(log);
+        return ModerationMapper.ToResponse(log);
     }
-
-    private static BanResponse Map(CommunityBan ban)
-        => new(
-            ban.Id.Value,
-            ban.CommunityId.Value,
-            ban.UserId.Value,
-            ban.BannedAt,
-            ban.Reason,
-            ban.UnbannedAt);
-
-    private static ModerationLogEntryResponse Map(ModerationLog log)
-        => new(
-            log.Id.Value,
-            log.CommunityId.Value,
-            log.Action,
-            log.PerformedBy.Value,
-            log.TargetUserId?.Value,
-            log.TargetContent,
-            log.PerformedAt);
 }

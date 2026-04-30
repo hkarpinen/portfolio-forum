@@ -1,4 +1,5 @@
 using Forum.Application.Contracts;
+using Forum.Application.Mappers;
 using Forum.Application.Queries;
 using Forum.Domain.Aggregates;
 using Forum.Domain.Engines;
@@ -150,7 +151,7 @@ internal sealed class CommunityQuery : ICommunityQuery
                     CommentCount: commentCountByCommunity.GetValueOrDefault(c.Id.Value, 0));
             })
             .OrderByDescending(x => x.Activity?.HotScore ?? double.MinValue)
-            .Select(x => MapResponse(x.Community, x.Activity, x.MemberCount, x.ThreadCount, x.CommentCount))
+            .Select(x => CommunityMapper.ToResponse(x.Community, x.Activity, x.MemberCount, x.ThreadCount, x.CommentCount))
             .ToList();
 
         return new CommunityListResponse(responses, total);
@@ -159,27 +160,12 @@ internal sealed class CommunityQuery : ICommunityQuery
     public async Task<CommunityResponse?> GetDetailAsync(CommunityDetailRequest request, CancellationToken cancellationToken = default)
     {
         var community = await _db.Communities.FirstOrDefaultAsync(c => c.Id == new CommunityId(request.CommunityId), cancellationToken);
-        return community is null ? null : MapResponse(community);
+        return community is null ? null : CommunityMapper.ToResponse(community);
     }
 
     public async Task<CommunityResponse?> GetBySlugAsync(CommunityBySlugRequest request, CancellationToken cancellationToken = default)
     {
         var community = await _db.Communities.FirstOrDefaultAsync(c => c.Slug == request.Slug, cancellationToken);
-        return community is null ? null : MapResponse(community);
+        return community is null ? null : CommunityMapper.ToResponse(community);
     }
-
-    private static CommunityResponse MapResponse(Community c, CommunityActivitySnapshot? activity = null, int memberCount = 0, int threadCount = 0, int commentCount = 0) => new(
-        c.Id.Value,
-        c.Slug,
-        c.Name,
-        c.Description,
-        c.ImageUrl,
-        c.Visibility,
-        c.OwnerId.Value,
-        c.CreatedAt,
-        c.UpdatedAt,
-        activity,
-        memberCount,
-        threadCount,
-        commentCount);
 }

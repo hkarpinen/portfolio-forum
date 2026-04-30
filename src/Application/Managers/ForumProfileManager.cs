@@ -1,4 +1,5 @@
 using Forum.Application.Contracts;
+using Forum.Application.Mappers;
 using Forum.Domain.Aggregates;
 using Forum.Domain.Repositories;
 using Forum.Domain.ValueObjects;
@@ -30,16 +31,6 @@ internal sealed class ForumProfileManager : IForumProfileManager
             await _repository.UpdateAsync(profile, cancellationToken);
         }
 
-        return Map(profile);
+        return ForumProfileMapper.ToResponse(profile);
     }
-
-    private static ForumProfileResponse Map(ForumProfile profile)
-        => new(
-            profile.UserId.Value,
-            null,
-            null,
-            profile.Bio,
-            profile.Signature,
-            profile.CreatedAt,
-            profile.UpdatedAt);
 }
