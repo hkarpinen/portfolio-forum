@@ -4,8 +4,6 @@ namespace Tests;
 
 public class SpamDetectionEngineTests
 {
-    private readonly ISpamDetectionEngine _engine = new SpamDetectionEngine();
-
     [Fact]
     public void IsSpam_NormalContent_ReturnsFalse()
     {
@@ -13,7 +11,7 @@ public class SpamDetectionEngineTests
         var userId = Guid.NewGuid();
 
         // Act
-        var result = _engine.IsSpam("Hello, this is a normal post.", userId);
+        var result = SpamDetectionEngine.IsSpam("Hello, this is a normal post.", userId);
 
         // Assert
         Assert.False(result);
@@ -26,7 +24,7 @@ public class SpamDetectionEngineTests
         var userId = Guid.NewGuid();
 
         // Act
-        var result = _engine.IsSpam("Buy cheap spam now!", userId);
+        var result = SpamDetectionEngine.IsSpam("Buy cheap spam now!", userId);
 
         // Assert
         Assert.True(result);
@@ -39,7 +37,7 @@ public class SpamDetectionEngineTests
         var userId = Guid.NewGuid();
 
         // Act
-        var result = _engine.IsSpam("", userId);
+        var result = SpamDetectionEngine.IsSpam("", userId);
 
         // Assert
         Assert.True(result);
@@ -52,7 +50,7 @@ public class SpamDetectionEngineTests
         var userId = Guid.NewGuid();
 
         // Act
-        var result = _engine.IsSpam("   ", userId);
+        var result = SpamDetectionEngine.IsSpam("   ", userId);
 
         // Assert
         Assert.True(result);
@@ -65,7 +63,7 @@ public class SpamDetectionEngineTests
         var userId = Guid.NewGuid();
 
         // Act
-        var result = _engine.IsSpam("SPAM SPAM SPAM", userId);
+        var result = SpamDetectionEngine.IsSpam("SPAM SPAM SPAM", userId);
 
         // Assert
         Assert.True(result);
