@@ -1,5 +1,5 @@
 using Forum.Domain.Aggregates;
-using Forum.Domain.ReadModels;
+using Infrastructure.Persistence.Projections;
 using Forum.Domain.ValueObjects;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;

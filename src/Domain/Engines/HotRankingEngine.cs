@@ -1,10 +1,8 @@
-using System;
-
 namespace Forum.Domain.Engines;
 
-internal sealed class HotRankingEngine : IHotRankingEngine
+public static class HotRankingEngine
 {
-    public double CalculateHotScore(DateTime createdAt, int score, int commentCount)
+    public static double CalculateHotScore(DateTime createdAt, int score, int commentCount)
     {
         // Engagement boost: votes count heavily, comments add a bonus
         var engagementBoost = score * 2.0 + commentCount * 1.5;

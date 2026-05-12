@@ -1,11 +1,11 @@
-using Client.Contracts;
+using Forum.Application.Commands;
 using FluentValidation;
 
 namespace Client.Validators;
 
-public sealed class SearchQueryDtoValidator : AbstractValidator<SearchQueryDto>
+public sealed class SearchQueryCommandValidator : AbstractValidator<SearchQueryCommand>
 {
-    public SearchQueryDtoValidator()
+    public SearchQueryCommandValidator()
     {
         RuleFor(x => x.Query)
             .NotEmpty()

@@ -1,8 +1,9 @@
-using Forum.Application.Contracts;
+using Forum.Application.Commands;
+using Forum.Application.Dtos;
 
 namespace Forum.Application.Queries;
 
 public interface IModerationQuery
 {
-    Task<ModerationQueueResponse> QueueAsync(ModerationQueueRequest request, CancellationToken cancellationToken = default);
+    Task<ModerationQueueDto> QueueAsync(ModerationQueueCommand command, CancellationToken cancellationToken = default);
 }

@@ -1,8 +1,7 @@
+using Forum.Application.Commands;
 using Forum.Application.Managers;
 using Client.Authorization;
-using Client.Contracts;
 using Client.Extensions;
-using Forum.Application.Contracts;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -24,10 +23,10 @@ public sealed class VotesController : ControllerBase
     [HttpPost]
     [Authorize(Policy = ForumAuthorizationPolicies.MemberOrAbove)]
     [EnableRateLimiting("write")]
-    public async Task<IActionResult> Cast([FromBody] CastVoteDto request, CancellationToken cancellationToken)
+    public async Task<IActionResult> Cast([FromBody] CastVoteCommand request, CancellationToken cancellationToken)
     {
         var result = await _voteManager.CastAsync(
-            new CastVoteRequest(request.TargetType, request.TargetId, User.GetRequiredUserId(), request.Direction),
+            request with { UserId = User.GetRequiredUserId() },
             cancellationToken);
 
         return StatusCode(StatusCodes.Status201Created, result);
@@ -36,9 +35,10 @@ public sealed class VotesController : ControllerBase
     [HttpPut("{voteId:guid}")]
     [Authorize(Policy = ForumAuthorizationPolicies.MemberOrAbove)]
     [EnableRateLimiting("write")]
-    public async Task<IActionResult> Switch([FromRoute] Guid voteId, [FromBody] SwitchVoteDto request, CancellationToken cancellationToken)
+    public async Task<IActionResult> Switch([FromRoute] Guid voteId, [FromBody] SwitchVoteCommand request,
+        CancellationToken cancellationToken)
     {
-        var result = await _voteManager.SwitchAsync(new SwitchVoteRequest(voteId, request.Direction), cancellationToken);
+        var result = await _voteManager.SwitchAsync(request with { VoteId = voteId }, cancellationToken);
         return result is null ? NotFound() : Ok(result);
     }
 
@@ -47,7 +47,7 @@ public sealed class VotesController : ControllerBase
     [EnableRateLimiting("write")]
     public async Task<IActionResult> Retract([FromRoute] Guid voteId, CancellationToken cancellationToken)
     {
-        var result = await _voteManager.RetractAsync(new RetractVoteRequest(voteId), cancellationToken);
+        var result = await _voteManager.RetractAsync(new RetractVoteCommand(voteId), cancellationToken);
         return result is null ? NotFound() : NoContent();
     }
 }

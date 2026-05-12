@@ -1,8 +1,9 @@
-using Forum.Application.Contracts;
+using Forum.Application.Commands;
+using Forum.Application.Dtos;
 
 namespace Forum.Application.Queries;
 
 public interface IForumProfileQuery
 {
-    Task<ForumProfileResponse?> GetAsync(GetForumProfileRequest request, CancellationToken cancellationToken = default);
+    Task<ForumProfileDto?> GetAsync(GetForumProfileCommand command, CancellationToken cancellationToken = default);
 }

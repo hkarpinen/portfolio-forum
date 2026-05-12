@@ -1,12 +1,13 @@
-using Forum.Application.Contracts;
+using Forum.Application.Commands;
+using Forum.Application.Dtos;
 
 namespace Forum.Application.Managers;
 
 public interface IThreadWorkflowManager
 {
-    Task<ThreadMutationResponse> CreateAsync(CreateThreadRequest request, CancellationToken cancellationToken = default);
-    Task<ThreadMutationResponse?> EditAsync(EditThreadRequest request, CancellationToken cancellationToken = default);
-    Task<ThreadMutationResponse?> DeleteAsync(DeleteThreadRequest request, CancellationToken cancellationToken = default);
-    Task<ThreadMutationResponse?> LockAsync(LockThreadRequest request, CancellationToken cancellationToken = default);
-    Task<ThreadMutationResponse?> PinAsync(PinThreadRequest request, CancellationToken cancellationToken = default);
+    Task<ThreadMutationDto> CreateAsync(CreateThreadCommand command, CancellationToken cancellationToken = default);
+    Task<ThreadMutationDto?> EditAsync(EditThreadCommand command, CancellationToken cancellationToken = default);
+    Task<ThreadMutationDto?> DeleteAsync(DeleteThreadCommand command, CancellationToken cancellationToken = default);
+    Task<ThreadMutationDto?> LockAsync(LockThreadCommand command, CancellationToken cancellationToken = default);
+    Task<ThreadMutationDto?> PinAsync(PinThreadCommand command, CancellationToken cancellationToken = default);
 }

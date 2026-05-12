@@ -1,7 +1,8 @@
-using Forum.Application.Contracts;
+using Forum.Application.Commands;
+using Forum.Application.Dtos;
 using Forum.Application.Mappers;
 using Forum.Domain.Aggregates;
-using Forum.Domain.Repositories;
+using Forum.Application.Repositories;
 using Forum.Domain.ValueObjects;
 
 namespace Forum.Application.Managers;
@@ -15,22 +16,23 @@ internal sealed class ForumProfileManager : IForumProfileManager
         _repository = repository;
     }
 
-    public async Task<ForumProfileResponse> UpsertAsync(UpdateForumProfileRequest request, CancellationToken cancellationToken = default)
+    public async Task<ForumProfileDto> UpsertAsync(UpdateForumProfileCommand command, CancellationToken cancellationToken = default)
     {
-        var userId = new UserId(request.UserId);
+        var userId = new UserId(command.UserId);
         var profile = await _repository.GetByUserIdAsync(userId, cancellationToken);
 
         if (profile is null)
         {
-            profile = ForumProfile.Create(userId, request.Bio, request.Signature);
+            profile = ForumProfile.Create(userId, command.Bio, command.Signature);
             await _repository.AddAsync(profile, cancellationToken);
         }
         else
         {
-            profile.Update(request.Bio, request.Signature, DateTime.UtcNow);
+            profile.Update(command.Bio, command.Signature, DateTime.UtcNow);
             await _repository.UpdateAsync(profile, cancellationToken);
         }
 
-        return ForumProfileMapper.ToResponse(profile);
+        await _repository.CommitAsync(cancellationToken);
+        return ForumProfileMapper.ToDto(profile);
     }
 }

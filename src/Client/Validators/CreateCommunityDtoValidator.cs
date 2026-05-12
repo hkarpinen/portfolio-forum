@@ -1,11 +1,11 @@
-using Client.Contracts;
+using Forum.Application.Commands;
 using FluentValidation;
 
 namespace Client.Validators;
 
-public sealed class CreateCommunityDtoValidator : AbstractValidator<CreateCommunityDto>
+public sealed class CreateCommunityCommandValidator : AbstractValidator<CreateCommunityCommand>
 {
-    public CreateCommunityDtoValidator()
+    public CreateCommunityCommandValidator()
     {
         RuleFor(x => x.Name)
             .NotEmpty()

@@ -1,7 +1,7 @@
 using Forum.Domain.Aggregates;
 using Forum.Domain.ValueObjects;
 
-namespace Forum.Domain.Repositories;
+namespace Forum.Application.Repositories;
 
 public interface IMembershipRepository
 {
@@ -10,4 +10,5 @@ public interface IMembershipRepository
     Task AddAsync(CommunityMembership membership, CancellationToken cancellationToken = default);
     Task UpdateAsync(CommunityMembership membership, CancellationToken cancellationToken = default);
     Task DeleteAsync(MembershipId id, CancellationToken cancellationToken = default);
+    Task CommitAsync(CancellationToken cancellationToken = default);
 }

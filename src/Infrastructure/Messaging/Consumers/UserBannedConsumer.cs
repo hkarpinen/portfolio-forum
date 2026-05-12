@@ -1,5 +1,5 @@
 using Forum.Domain.Aggregates;
-using Forum.Domain.ReadModels;
+using Infrastructure.Persistence.Projections;
 using Forum.Domain.ValueObjects;
 using Infrastructure.Messaging.Events;
 using Infrastructure.Persistence;

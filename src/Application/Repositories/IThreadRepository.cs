@@ -1,7 +1,7 @@
 using Forum.Domain.Aggregates;
 using Forum.Domain.ValueObjects;
 
-namespace Forum.Domain.Repositories;
+namespace Forum.Application.Repositories;
 
 public interface IThreadRepository
 {
@@ -9,4 +9,5 @@ public interface IThreadRepository
     Task AddAsync(ForumThread thread, CancellationToken cancellationToken = default);
     Task UpdateAsync(ForumThread thread, CancellationToken cancellationToken = default);
     Task DeleteAsync(ThreadId id, CancellationToken cancellationToken = default);
+    Task CommitAsync(CancellationToken cancellationToken = default);
 }

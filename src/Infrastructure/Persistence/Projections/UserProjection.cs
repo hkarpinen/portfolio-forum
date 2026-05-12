@@ -1,10 +1,11 @@
 using Forum.Domain.ValueObjects;
 
-namespace Forum.Domain.ReadModels;
+namespace Infrastructure.Persistence.Projections;
 
 /// <summary>
-/// Denormalized read model for user data projected from the Identity service.
-/// Not an aggregate — has no lifecycle, invariants, or domain events.
+/// Denormalized projection of user data synced from the Identity service via domain events.
+/// Persisted by infrastructure event consumers; read by infrastructure query classes.
+/// Not a domain aggregate — has no lifecycle, invariants, or domain events.
 /// </summary>
 public sealed class UserProjection
 {
@@ -13,7 +14,7 @@ public sealed class UserProjection
     public string? DisplayName { get; set; }
     public string? AvatarUrl { get; set; }
 
-    /// <summary>Returns DisplayName if set, otherwise falls back to UserName. Use this everywhere instead of the scattered <c>DisplayName ?? UserName</c> pattern.</summary>
+    /// <summary>Returns DisplayName if set, otherwise falls back to UserName.</summary>
     public string EffectiveName => DisplayName ?? UserName;
     public DateTime RegisteredAt { get; set; }
     public bool IsBanned { get; set; }

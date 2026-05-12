@@ -1,7 +1,7 @@
 using Forum.Domain.Aggregates;
 using Forum.Domain.ValueObjects;
 
-namespace Forum.Domain.Repositories;
+namespace Forum.Application.Repositories;
 
 public interface ICommentRepository
 {
@@ -9,4 +9,5 @@ public interface ICommentRepository
     Task AddAsync(Comment comment, CancellationToken cancellationToken = default);
     Task UpdateAsync(Comment comment, CancellationToken cancellationToken = default);
     Task DeleteAsync(CommentId id, CancellationToken cancellationToken = default);
+    Task CommitAsync(CancellationToken cancellationToken = default);
 }

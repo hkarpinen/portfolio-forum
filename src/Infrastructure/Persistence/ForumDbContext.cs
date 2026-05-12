@@ -1,5 +1,6 @@
+using Forum.Domain;
 using Forum.Domain.Aggregates;
-using Forum.Domain.ReadModels;
+using Infrastructure.Persistence.Projections;
 using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.Persistence;
@@ -21,6 +22,27 @@ public sealed class ForumDbContext : DbContext
     public ForumDbContext(DbContextOptions<ForumDbContext> options)
         : base(options)
     {
+    }
+
+    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    {
+        DrainDomainEventsToOutbox();
+        return await base.SaveChangesAsync(cancellationToken);
+    }
+
+    private void DrainDomainEventsToOutbox()
+    {
+        var aggregates = ChangeTracker.Entries<IAggregateRoot>()
+            .Where(e => e.Entity.DomainEvents.Any())
+            .Select(e => e.Entity)
+            .ToList();
+
+        foreach (var aggregate in aggregates)
+        {
+            foreach (var domainEvent in aggregate.DomainEvents)
+                this.AddToOutbox(domainEvent);
+            aggregate.ClearDomainEvents();
+        }
     }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

@@ -1,4 +1,5 @@
-using Forum.Application.Contracts;
+using Forum.Application.Commands;
+using Forum.Application.Dtos;
 using Forum.Application.Mappers;
 using Forum.Application.Queries;
 using Forum.Domain.ValueObjects;
@@ -13,16 +14,18 @@ internal sealed class CommentQuery : ICommentQuery
 
     public CommentQuery(ForumDbContext db) => _db = db;
 
-    public async Task<CommentTreeResponse> ListTreeAsync(ListCommentTreeRequest request, CancellationToken cancellationToken = default)
+    public async Task<CommentTreeDto> ListTreeAsync(ListCommentTreeCommand request, CancellationToken cancellationToken = default)
     {
         var threadId = new ThreadId(request.ThreadId);
         var comments = await _db.Comments
+            .AsNoTracking()
             .Where(c => c.ThreadId == threadId && c.DeletedAt == null)
             .OrderBy(c => c.CreatedAt)
             .ToListAsync(cancellationToken);
 
         var authorIds = comments.Select(c => c.AuthorId).Distinct().ToList();
         var projections = await _db.UserProjections
+            .AsNoTracking()
             .Where(p => authorIds.Contains(p.Id))
             .ToListAsync(cancellationToken);
         var projDict = projections.ToDictionary(p => p.Id);
@@ -33,34 +36,35 @@ internal sealed class CommentQuery : ICommentQuery
             c =>
             {
                 projDict.TryGetValue(c.AuthorId, out var proj);
-                return (response: CommentMapper.ToResponse(c, proj, c.VoteScore), children: new List<CommentTreeNodeResponse>());
+                return (response: CommentMapper.ToDto(c, proj?.EffectiveName, proj?.AvatarUrl, c.VoteScore), children: new List<CommentTreeNodeDto>());
             });
 
         // Wire children into their parents; collect root-level comments
-        var roots = new List<CommentTreeNodeResponse>();
+        var roots = new List<CommentTreeNodeDto>();
         foreach (var comment in comments)
         {
             var parentId = comment.ParentCommentId?.Value;
             if (parentId.HasValue && nodeMap.TryGetValue(parentId.Value, out var parent))
             {
-                parent.children.Add(new CommentTreeNodeResponse(nodeMap[comment.Id.Value].response, nodeMap[comment.Id.Value].children));
+                parent.children.Add(new CommentTreeNodeDto(nodeMap[comment.Id.Value].response, nodeMap[comment.Id.Value].children));
             }
             else
             {
-                roots.Add(new CommentTreeNodeResponse(nodeMap[comment.Id.Value].response, nodeMap[comment.Id.Value].children));
+                roots.Add(new CommentTreeNodeDto(nodeMap[comment.Id.Value].response, nodeMap[comment.Id.Value].children));
             }
         }
 
-        return new CommentTreeResponse(roots);
+        return new CommentTreeDto(roots);
     }
 
-    public async Task<ProfileCommentListResponse> ListByAuthorAsync(Guid authorId, int page, int pageSize, CancellationToken cancellationToken = default)
+    public async Task<ProfileCommentListDto> ListByAuthorAsync(Guid authorId, int page, int pageSize, CancellationToken cancellationToken = default)
     {
         var authorIdVO = new UserId(authorId);
         var total = await _db.Comments
             .CountAsync(c => c.AuthorId == authorIdVO && c.DeletedAt == null, cancellationToken);
 
         var comments = await _db.Comments
+            .AsNoTracking()
             .Where(c => c.AuthorId == authorIdVO && c.DeletedAt == null)
             .OrderByDescending(c => c.CreatedAt)
             .Skip((page - 1) * pageSize)
@@ -68,16 +72,18 @@ internal sealed class CommentQuery : ICommentQuery
             .ToListAsync(cancellationToken);
 
         if (comments.Count == 0)
-            return new ProfileCommentListResponse([], total);
+            return new ProfileCommentListDto([], total);
 
         var threadIds = comments.Select(c => c.ThreadId).Distinct().ToList();
         var threads = await _db.Threads
+            .AsNoTracking()
             .Where(t => threadIds.Contains(t.Id) && t.DeletedAt == null)
             .ToListAsync(cancellationToken);
         var threadDict = threads.ToDictionary(t => t.Id.Value);
 
         var communityIds = threads.Select(t => t.CommunityId).Distinct().ToList();
         var communities = await _db.Communities
+            .AsNoTracking()
             .Where(c => communityIds.Contains(c.Id))
             .ToListAsync(cancellationToken);
         var communityDict = communities.ToDictionary(c => c.Id.Value);
@@ -88,7 +94,7 @@ internal sealed class CommentQuery : ICommentQuery
             {
                 var thread = threadDict[c.ThreadId.Value];
                 communityDict.TryGetValue(thread.CommunityId.Value, out var comm);
-                return new ProfileCommentSummaryResponse(
+                return new ProfileCommentSummaryDto(
                     c.Id.Value,
                     c.ThreadId.Value,
                     thread.Title,
@@ -100,6 +106,6 @@ internal sealed class CommentQuery : ICommentQuery
             })
             .ToList();
 
-        return new ProfileCommentListResponse(items, total);
+        return new ProfileCommentListDto(items, total);
     }
 }

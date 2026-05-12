@@ -1,7 +1,7 @@
 using Client.Authorization;
-using Client.Contracts;
 using Client.Extensions;
-using Forum.Application.Contracts;
+using Forum.Application.Commands;
+using Forum.Application.Dtos;
 using Forum.Application.Managers;
 using Forum.Application.Queries;
 using Microsoft.AspNetCore.Authorization;
@@ -40,15 +40,15 @@ public sealed class ForumProfilesController : ControllerBase
     public async Task<IActionResult> GetMine(CancellationToken cancellationToken)
     {
         var userId = User.GetRequiredUserId();
-        var result = await _profileQuery.GetAsync(new GetForumProfileRequest(userId), cancellationToken);
-        return Ok(result ?? new ForumProfileResponse(userId, null, null, null, null, DateTime.UtcNow, null));
+        var result = await _profileQuery.GetAsync(new GetForumProfileCommand(userId), cancellationToken);
+        return Ok(result ?? new ForumProfileDto(userId, null, null, null, null, DateTime.UtcNow, null));
     }
 
     [HttpGet("{userId:guid}")]
     [AllowAnonymous]
     public async Task<IActionResult> GetByUserId([FromRoute] Guid userId, CancellationToken cancellationToken)
     {
-        var result = await _profileQuery.GetAsync(new GetForumProfileRequest(userId), cancellationToken);
+        var result = await _profileQuery.GetAsync(new GetForumProfileCommand(userId), cancellationToken);
         return result is null ? NotFound() : Ok(result);
     }
 
@@ -88,11 +88,12 @@ public sealed class ForumProfilesController : ControllerBase
 
     [HttpPut("me")]
     [Authorize(Policy = ForumAuthorizationPolicies.MemberOrAbove)]
-    public async Task<IActionResult> UpdateMine([FromBody] UpdateForumProfileDto request, CancellationToken cancellationToken)
+    public async Task<IActionResult> UpdateMine([FromBody] UpdateForumProfileCommand request,
+        CancellationToken cancellationToken)
     {
         var userId = User.GetRequiredUserId();
         var result = await _profileManager.UpsertAsync(
-            new UpdateForumProfileRequest(userId, request.Bio, request.Signature),
+            request with { UserId = userId },
             cancellationToken);
         return Ok(result);
     }

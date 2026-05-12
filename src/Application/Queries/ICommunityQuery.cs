@@ -1,10 +1,11 @@
-using Forum.Application.Contracts;
+using Forum.Application.Commands;
+using Forum.Application.Dtos;
 
 namespace Forum.Application.Queries;
 
 public interface ICommunityQuery
 {
-    Task<CommunityListResponse> ListAsync(ListCommunitiesRequest request, CancellationToken cancellationToken = default);
-    Task<CommunityResponse?> GetDetailAsync(CommunityDetailRequest request, CancellationToken cancellationToken = default);
-    Task<CommunityResponse?> GetBySlugAsync(CommunityBySlugRequest request, CancellationToken cancellationToken = default);
+    Task<CommunityListDto> ListAsync(ListCommunitiesCommand command, CancellationToken cancellationToken = default);
+    Task<CommunityDto?> GetDetailAsync(CommunityDetailCommand command, CancellationToken cancellationToken = default);
+    Task<CommunityDto?> GetBySlugAsync(CommunityBySlugCommand command, CancellationToken cancellationToken = default);
 }

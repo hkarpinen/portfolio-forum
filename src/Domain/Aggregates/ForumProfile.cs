@@ -3,7 +3,7 @@ using Forum.Domain.ValueObjects;
 
 namespace Forum.Domain.Aggregates;
 
-public sealed class ForumProfile
+public sealed class ForumProfile : IAggregateRoot
 {
     public const int MaxBioLength = 500;
     public const int MaxSignatureLength = 200;

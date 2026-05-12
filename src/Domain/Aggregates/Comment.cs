@@ -3,7 +3,7 @@ using Forum.Domain.Events;
 
 namespace Forum.Domain.Aggregates;
 
-public sealed class Comment
+public sealed class Comment : IAggregateRoot
 {
     private readonly List<object> _domainEvents = new();
     public IReadOnlyCollection<object> DomainEvents => _domainEvents.AsReadOnly();

@@ -3,7 +3,7 @@ using Forum.Domain.Events;
 
 namespace Forum.Domain.Aggregates;
 
-public sealed class Vote
+public sealed class Vote : IAggregateRoot
 {
     private readonly List<object> _domainEvents = new();
     public IReadOnlyCollection<object> DomainEvents => _domainEvents.AsReadOnly();

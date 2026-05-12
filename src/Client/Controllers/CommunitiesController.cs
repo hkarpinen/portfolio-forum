@@ -1,12 +1,12 @@
+using Forum.Application.Commands;
 using Forum.Application.Managers;
 using Forum.Application.Queries;
 using Client.Authorization;
-using Client.Contracts;
 using Client.Extensions;
-using Forum.Application.Contracts;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+
 namespace Client.Controllers;
 
 [ApiController]
@@ -34,10 +34,11 @@ public sealed class CommunitiesController : ControllerBase
     [HttpPost]
     [Authorize(Policy = ForumAuthorizationPolicies.MemberOrAbove)]
     [EnableRateLimiting("write")]
-    public async Task<IActionResult> Create([FromBody] CreateCommunityDto request, CancellationToken cancellationToken)
+    public async Task<IActionResult> Create([FromBody] CreateCommunityCommand request,
+        CancellationToken cancellationToken)
     {
         var created = await _communityWorkflowManager.CreateAsync(
-            new CreateCommunityRequest(request.Name, request.Visibility, User.GetRequiredUserId(), request.Description, request.ImageUrl),
+            request with { OwnerId = User.GetRequiredUserId() },
             cancellationToken);
 
         return CreatedAtAction(nameof(GetById), new { communityId = created.CommunityId }, created);
@@ -45,9 +46,10 @@ public sealed class CommunitiesController : ControllerBase
 
     [HttpGet]
     [AllowAnonymous]
-    public async Task<IActionResult> List([FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> List([FromQuery] int page = 1, [FromQuery] int pageSize = 20,
+        CancellationToken cancellationToken = default)
     {
-        var result = await _communityQuery.ListAsync(new ListCommunitiesRequest(page, pageSize), cancellationToken);
+        var result = await _communityQuery.ListAsync(new ListCommunitiesCommand(page, pageSize), cancellationToken);
         return Ok(result);
     }
 
@@ -55,7 +57,7 @@ public sealed class CommunitiesController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> GetById([FromRoute] Guid communityId, CancellationToken cancellationToken)
     {
-        var result = await _communityQuery.GetDetailAsync(new CommunityDetailRequest(communityId), cancellationToken);
+        var result = await _communityQuery.GetDetailAsync(new CommunityDetailCommand(communityId), cancellationToken);
         return result is null ? NotFound() : Ok(result);
     }
 
@@ -63,26 +65,25 @@ public sealed class CommunitiesController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> GetBySlug([FromRoute] string slug, CancellationToken cancellationToken)
     {
-        var result = await _communityQuery.GetBySlugAsync(new CommunityBySlugRequest(slug), cancellationToken);
+        var result = await _communityQuery.GetBySlugAsync(new CommunityBySlugCommand(slug), cancellationToken);
         return result is null ? NotFound() : Ok(result);
     }
 
     [HttpPut("{communityId:guid}")]
     [Authorize(Policy = ForumAuthorizationPolicies.MemberOrAbove)]
     [EnableRateLimiting("write")]
-    public async Task<IActionResult> Update([FromRoute] Guid communityId, [FromBody] UpdateCommunityDto request, CancellationToken cancellationToken)
+    public async Task<IActionResult> Update([FromRoute] Guid communityId, [FromBody] UpdateCommunityCommand request,
+        CancellationToken cancellationToken)
     {
         try
         {
             var result = await _communityWorkflowManager.UpdateAsync(
-                new UpdateCommunityRequest(
-                    communityId,
-                    request.Name,
-                    request.Visibility,
-                    User.GetRequiredUserId(),
-                    User.IsAdmin(),
-                    request.Description,
-                    request.ImageUrl),
+                request with
+                {
+                    CommunityId = communityId,
+                    RequestingUserId = User.GetRequiredUserId(),
+                    RequestingUserIsAdmin = User.IsAdmin()
+                },
                 cancellationToken);
 
             return result is null ? NotFound() : Ok(result);
@@ -107,7 +108,7 @@ public sealed class CommunitiesController : ControllerBase
     public async Task<IActionResult> Join([FromRoute] Guid communityId, CancellationToken cancellationToken)
     {
         var result = await _membershipManager.JoinAsync(
-            new JoinCommunityRequest(communityId, User.GetRequiredUserId()),
+            new JoinCommunityCommand(communityId, User.GetRequiredUserId()),
             cancellationToken);
 
         return CreatedAtAction(nameof(GetMembership), new { communityId }, result);
@@ -116,10 +117,11 @@ public sealed class CommunitiesController : ControllerBase
     [HttpPost("{communityId:guid}/ownership")]
     [Authorize(Policy = ForumAuthorizationPolicies.AdminOnly)]
     [EnableRateLimiting("write")]
-    public async Task<IActionResult> TransferOwnership([FromRoute] Guid communityId, [FromBody] TransferOwnershipDto request, CancellationToken cancellationToken)
+    public async Task<IActionResult> TransferOwnership([FromRoute] Guid communityId,
+        [FromBody] TransferCommunityOwnershipCommand request, CancellationToken cancellationToken)
     {
         var result = await _communityWorkflowManager.TransferOwnershipAsync(
-            new TransferCommunityOwnershipRequest(communityId, request.NewOwnerId),
+            request with { CommunityId = communityId },
             cancellationToken);
 
         return result is null ? NotFound() : Ok(result);
@@ -133,7 +135,7 @@ public sealed class CommunitiesController : ControllerBase
         try
         {
             var deleted = await _communityWorkflowManager.DeleteAsync(
-                new DeleteCommunityRequest(communityId, User.GetRequiredUserId(), User.IsAdmin()),
+                new DeleteCommunityCommand(communityId, User.GetRequiredUserId(), User.IsAdmin()),
                 cancellationToken);
 
             return deleted ? NoContent() : NotFound();
@@ -142,5 +144,37 @@ public sealed class CommunitiesController : ControllerBase
         {
             return Forbid();
         }
+    }
+
+    [HttpGet("{communityId:guid}/members")]
+    [Authorize(Policy = ForumAuthorizationPolicies.MemberOrAbove)]
+    public async Task<IActionResult> ListMembers([FromRoute] Guid communityId, CancellationToken cancellationToken)
+    {
+        var members = await _membershipQuery.ListByCommunityAsync(communityId, cancellationToken);
+        return Ok(members);
+    }
+
+    [HttpPost("/api/forum/memberships/{membershipId:guid}/moderator")]
+    [Authorize(Policy = ForumAuthorizationPolicies.MemberOrAbove)]
+    [EnableRateLimiting("write")]
+    public async Task<IActionResult> AppointModerator([FromRoute] Guid membershipId, CancellationToken cancellationToken)
+    {
+        var result = await _membershipManager.AppointModeratorAsync(
+            new AppointModeratorCommand(membershipId),
+            cancellationToken);
+
+        return result is null ? NotFound() : Ok(result);
+    }
+
+    [HttpDelete("/api/forum/memberships/{membershipId:guid}/moderator")]
+    [Authorize(Policy = ForumAuthorizationPolicies.MemberOrAbove)]
+    [EnableRateLimiting("write")]
+    public async Task<IActionResult> RemoveModerator([FromRoute] Guid membershipId, CancellationToken cancellationToken)
+    {
+        var result = await _membershipManager.RemoveModeratorAsync(
+            new RemoveModeratorCommand(membershipId),
+            cancellationToken);
+
+        return result is null ? NotFound() : Ok(result);
     }
 }

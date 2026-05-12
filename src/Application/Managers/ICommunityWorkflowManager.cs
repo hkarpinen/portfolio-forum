@@ -1,11 +1,12 @@
-using Forum.Application.Contracts;
+using Forum.Application.Commands;
+using Forum.Application.Dtos;
 
 namespace Forum.Application.Managers;
 
 public interface ICommunityWorkflowManager
 {
-    Task<CommunityResponse> CreateAsync(CreateCommunityRequest request, CancellationToken cancellationToken = default);
-    Task<CommunityResponse?> UpdateAsync(UpdateCommunityRequest request, CancellationToken cancellationToken = default);
-    Task<CommunityResponse?> TransferOwnershipAsync(TransferCommunityOwnershipRequest request, CancellationToken cancellationToken = default);
-    Task<bool> DeleteAsync(DeleteCommunityRequest request, CancellationToken cancellationToken = default);
+    Task<CommunityDto> CreateAsync(CreateCommunityCommand command, CancellationToken cancellationToken = default);
+    Task<CommunityDto?> UpdateAsync(UpdateCommunityCommand command, CancellationToken cancellationToken = default);
+    Task<CommunityDto?> TransferOwnershipAsync(TransferCommunityOwnershipCommand command, CancellationToken cancellationToken = default);
+    Task<bool> DeleteAsync(DeleteCommunityCommand command, CancellationToken cancellationToken = default);
 }

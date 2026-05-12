@@ -1,10 +1,10 @@
-using Forum.Application.Contracts;
+using Forum.Application.Commands;
 
 namespace Forum.Application.Managers;
 
 public interface ICommentWorkflowManager
 {
-    Task<Guid> CreateAsync(CreateCommentRequest request, CancellationToken cancellationToken = default);
-    Task<bool> EditAsync(EditCommentRequest request, CancellationToken cancellationToken = default);
-    Task<bool> DeleteAsync(DeleteCommentRequest request, CancellationToken cancellationToken = default);
+    Task<Guid> CreateAsync(CreateCommentCommand command, CancellationToken cancellationToken = default);
+    Task<bool> EditAsync(EditCommentCommand command, CancellationToken cancellationToken = default);
+    Task<bool> DeleteAsync(DeleteCommentCommand command, CancellationToken cancellationToken = default);
 }

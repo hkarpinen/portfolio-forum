@@ -1,6 +1,6 @@
 using Forum.Domain.Aggregates;
-using Forum.Domain.ReadModels;
-using Forum.Domain.Repositories;
+using Infrastructure.Persistence.Projections;
+using Forum.Application.Repositories;
 using Forum.Domain.ValueObjects;
 using Infrastructure.Messaging.Events;
 using Infrastructure.Persistence;

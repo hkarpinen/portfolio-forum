@@ -1,8 +1,9 @@
-using Forum.Application.Contracts;
+using Forum.Application.Commands;
+using Forum.Application.Dtos;
 
 namespace Forum.Application.Managers;
 
 public interface IForumProfileManager
 {
-    Task<ForumProfileResponse> UpsertAsync(UpdateForumProfileRequest request, CancellationToken cancellationToken = default);
+    Task<ForumProfileDto> UpsertAsync(UpdateForumProfileCommand command, CancellationToken cancellationToken = default);
 }

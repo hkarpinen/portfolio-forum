@@ -1,7 +1,8 @@
-using Forum.Application.Contracts;
+using Forum.Application.Commands;
+using Forum.Application.Dtos;
 using Forum.Application.Mappers;
 using Forum.Domain.Aggregates;
-using Forum.Domain.Repositories;
+using Forum.Application.Repositories;
 using Forum.Domain.ValueObjects;
 
 namespace Forum.Application.Managers;
@@ -17,86 +18,87 @@ internal sealed class CommunityWorkflowManager : ICommunityWorkflowManager
         _membershipRepository = membershipRepository;
     }
 
-    public async Task<CommunityResponse> CreateAsync(CreateCommunityRequest request, CancellationToken cancellationToken = default)
+    public async Task<CommunityDto> CreateAsync(CreateCommunityCommand command, CancellationToken cancellationToken = default)
     {
-        var slug = await ResolveUniqueSlugAsync(request.Name, existingCommunityId: null, cancellationToken);
+        var slug = await ResolveUniqueSlugAsync(command.Name, existingCommunityId: null, cancellationToken);
 
         var community = Community.Create(
-            request.Name,
+            command.Name,
             slug,
-            request.Visibility,
-            new UserId(request.OwnerId),
-            request.Description,
-            request.ImageUrl);
+            command.Visibility,
+            new UserId(command.OwnerId),
+            command.Description,
+            command.ImageUrl);
 
         await _communityRepository.AddAsync(community, cancellationToken);
 
-        // Create an Owner membership for the creator so they can manage the community
         var ownerMembership = CommunityMembership.Create(
             community.Id,
-            new UserId(request.OwnerId),
+            new UserId(command.OwnerId),
             CommunityRole.Owner);
         await _membershipRepository.AddAsync(ownerMembership, cancellationToken);
+        await _communityRepository.CommitAsync(cancellationToken);
 
-        return CommunityMapper.ToResponse(community);
+        return CommunityMapper.ToDto(community);
     }
 
-    public async Task<CommunityResponse?> UpdateAsync(UpdateCommunityRequest request, CancellationToken cancellationToken = default)
+    public async Task<CommunityDto?> UpdateAsync(UpdateCommunityCommand command, CancellationToken cancellationToken = default)
     {
-        var communityId = new CommunityId(request.CommunityId);
+        var communityId = new CommunityId(command.CommunityId);
         var community = await _communityRepository.GetByIdAsync(communityId, cancellationToken);
 
         if (community is null)
             return null;
 
-        // Resource-level auth: caller must be community Owner/Moderator or global Admin.
-        if (!request.RequestingUserIsAdmin)
+        if (!command.RequestingUserIsAdmin)
         {
             var membership = await _membershipRepository.GetByUserAndCommunityAsync(
-                new UserId(request.RequestingUserId), communityId, cancellationToken);
+                new UserId(command.RequestingUserId), communityId, cancellationToken);
 
             if (membership?.Role is not (CommunityRole.Owner or CommunityRole.Moderator))
                 throw new UnauthorizedAccessException("Only the community owner, a moderator, or a global admin can update this community.");
         }
 
         var slug = community.Slug;
-        if (!string.Equals(community.Name, request.Name, StringComparison.Ordinal))
+        if (!string.Equals(community.Name, command.Name, StringComparison.Ordinal))
         {
-            slug = await ResolveUniqueSlugAsync(request.Name, existingCommunityId: community.Id, cancellationToken);
+            slug = await ResolveUniqueSlugAsync(command.Name, existingCommunityId: community.Id, cancellationToken);
         }
 
-        community.Update(request.Name, slug, request.Visibility, DateTime.UtcNow, request.Description, request.ImageUrl);
+        community.Update(command.Name, slug, command.Visibility, DateTime.UtcNow, command.Description, command.ImageUrl);
         await _communityRepository.UpdateAsync(community, cancellationToken);
-        return CommunityMapper.ToResponse(community);
+        await _communityRepository.CommitAsync(cancellationToken);
+        return CommunityMapper.ToDto(community);
     }
 
-    public async Task<CommunityResponse?> TransferOwnershipAsync(TransferCommunityOwnershipRequest request, CancellationToken cancellationToken = default)
+    public async Task<CommunityDto?> TransferOwnershipAsync(TransferCommunityOwnershipCommand command, CancellationToken cancellationToken = default)
     {
-        var communityId = new CommunityId(request.CommunityId);
+        var communityId = new CommunityId(command.CommunityId);
         var community = await _communityRepository.GetByIdAsync(communityId, cancellationToken);
 
         if (community is null)
             return null;
 
-        community.TransferOwnership(new UserId(request.NewOwnerId), DateTime.UtcNow);
+        community.TransferOwnership(new UserId(command.NewOwnerId), DateTime.UtcNow);
         await _communityRepository.UpdateAsync(community, cancellationToken);
-        return CommunityMapper.ToResponse(community);
+        await _communityRepository.CommitAsync(cancellationToken);
+        return CommunityMapper.ToDto(community);
     }
 
-    public async Task<bool> DeleteAsync(DeleteCommunityRequest request, CancellationToken cancellationToken = default)
+    public async Task<bool> DeleteAsync(DeleteCommunityCommand command, CancellationToken cancellationToken = default)
     {
-        var communityId = new CommunityId(request.CommunityId);
+        var communityId = new CommunityId(command.CommunityId);
         var community = await _communityRepository.GetByIdAsync(communityId, cancellationToken);
 
         if (community is null)
             return false;
 
-        // Resource-level auth: only the owner or a global admin can delete.
-        if (!request.RequestingUserIsAdmin && community.OwnerId.Value != request.RequestedByUserId)
+        if (!command.RequestingUserIsAdmin && community.OwnerId.Value != command.RequestedByUserId)
             throw new UnauthorizedAccessException("Only the community owner or a global admin can delete this community.");
 
         community.Delete(DateTime.UtcNow);
         await _communityRepository.DeleteAsync(communityId, cancellationToken);
+        await _communityRepository.CommitAsync(cancellationToken);
         return true;
     }
 
@@ -105,7 +107,6 @@ internal sealed class CommunityWorkflowManager : ICommunityWorkflowManager
         var baseSlug = Community.Slugify(name);
         if (string.IsNullOrEmpty(baseSlug))
         {
-            // All non-alphanum chars (e.g. emoji-only name). Fall back to a random token.
             baseSlug = $"c-{Guid.NewGuid().ToString("N")[..8]}";
         }
 

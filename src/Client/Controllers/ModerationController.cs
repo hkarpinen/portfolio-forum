@@ -1,6 +1,6 @@
 using Client.Authorization;
 using Client.Extensions;
-using Forum.Application.Contracts;
+using Forum.Application.Commands;
 using Forum.Application.Managers;
 using Forum.Application.Queries;
 using Microsoft.AspNetCore.Authorization;
@@ -26,10 +26,10 @@ public sealed class ModerationController : ControllerBase
 
     [HttpPost("bans")]
     [EnableRateLimiting("write")]
-    public async Task<IActionResult> Ban([FromBody] BanUserDto request, CancellationToken cancellationToken)
+    public async Task<IActionResult> Ban([FromBody] BanUserCommand request, CancellationToken cancellationToken)
     {
         var result = await _moderationManager.BanAsync(
-            new BanUserRequest(request.CommunityId, request.UserId, User.GetRequiredUserId(), request.Reason),
+            request with { PerformedByUserId = User.GetRequiredUserId() },
             cancellationToken);
 
         return StatusCode(StatusCodes.Status201Created, result);
@@ -40,7 +40,7 @@ public sealed class ModerationController : ControllerBase
     public async Task<IActionResult> Unban([FromRoute] Guid banId, CancellationToken cancellationToken)
     {
         var result = await _moderationManager.UnbanAsync(
-            new UnbanUserRequest(banId, User.GetRequiredUserId()),
+            new UnbanUserCommand(banId, User.GetRequiredUserId()),
             cancellationToken);
 
         return result is null ? NotFound() : NoContent();
@@ -48,15 +48,11 @@ public sealed class ModerationController : ControllerBase
 
     [HttpPost("logs")]
     [EnableRateLimiting("write")]
-    public async Task<IActionResult> LogAction([FromBody] LogModerationActionDto request, CancellationToken cancellationToken)
+    public async Task<IActionResult> LogAction([FromBody] LogModerationActionCommand request,
+        CancellationToken cancellationToken)
     {
         var result = await _moderationManager.LogAsync(
-            new LogModerationActionRequest(
-                request.CommunityId,
-                request.Action,
-                User.GetRequiredUserId(),
-                request.TargetUserId,
-                request.TargetContent),
+            request with { PerformedByUserId = User.GetRequiredUserId() },
             cancellationToken);
 
         return StatusCode(StatusCodes.Status201Created, result);
@@ -70,17 +66,9 @@ public sealed class ModerationController : ControllerBase
         CancellationToken cancellationToken = default)
     {
         var result = await _moderationQuery.QueueAsync(
-            new ModerationQueueRequest(communityId, page, pageSize),
+            new ModerationQueueCommand(communityId, page, pageSize),
             cancellationToken);
 
         return Ok(result);
     }
 }
-
-public sealed record BanUserDto(Guid CommunityId, Guid UserId, string? Reason);
-
-public sealed record LogModerationActionDto(
-    Guid CommunityId,
-    Forum.Domain.ValueObjects.ModerationAction Action,
-    Guid? TargetUserId,
-    string? TargetContent);

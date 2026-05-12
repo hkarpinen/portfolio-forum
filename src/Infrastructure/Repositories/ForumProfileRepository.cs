@@ -1,5 +1,5 @@
 using Forum.Domain.Aggregates;
-using Forum.Domain.Repositories;
+using Forum.Application.Repositories;
 using Forum.Domain.ValueObjects;
 using Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -21,14 +21,14 @@ internal sealed class ForumProfileRepository : IForumProfileRepository
     public async Task AddAsync(ForumProfile profile, CancellationToken cancellationToken = default)
     {
         await _dbContext.ForumProfiles.AddAsync(profile, cancellationToken);
-        await _dbContext.SaveChangesAsync(cancellationToken);
-        profile.ClearDomainEvents();
     }
 
-    public async Task UpdateAsync(ForumProfile profile, CancellationToken cancellationToken = default)
+    public Task UpdateAsync(ForumProfile profile, CancellationToken cancellationToken = default)
     {
         _dbContext.ForumProfiles.Update(profile);
-        await _dbContext.SaveChangesAsync(cancellationToken);
-        profile.ClearDomainEvents();
+        return Task.CompletedTask;
     }
+
+    public Task CommitAsync(CancellationToken cancellationToken = default)
+        => _dbContext.SaveChangesAsync(cancellationToken);
 }

@@ -1,11 +1,12 @@
-using Forum.Application.Contracts;
+using Forum.Application.Commands;
+using Forum.Application.Dtos;
 using Forum.Application.Mappers;
 using Forum.Application.Queries;
 using Forum.Domain.Aggregates;
 using Forum.Domain.Engines;
-using Forum.Domain.ReadModels;
 using Forum.Domain.ValueObjects;
 using Infrastructure.Persistence;
+using Infrastructure.Persistence.Projections;
 using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.Queries;
@@ -13,18 +14,14 @@ namespace Infrastructure.Queries;
 internal sealed class CommunityQuery : ICommunityQuery
 {
     private readonly ForumDbContext _db;
-    private readonly IHotRankingEngine _hotRankingEngine;
 
-    public CommunityQuery(ForumDbContext db, IHotRankingEngine hotRankingEngine)
-    {
-        _db = db;
-        _hotRankingEngine = hotRankingEngine;
-    }
+    public CommunityQuery(ForumDbContext db) => _db = db;
 
-    public async Task<CommunityListResponse> ListAsync(ListCommunitiesRequest request, CancellationToken cancellationToken = default)
+    public async Task<CommunityListDto> ListAsync(ListCommunitiesCommand request, CancellationToken cancellationToken = default)
     {
         var total = await _db.Communities.CountAsync(cancellationToken);
         var communities = await _db.Communities
+            .AsNoTracking()
             .OrderBy(c => c.Name)
             .Skip((request.Page - 1) * request.PageSize)
             .Take(request.PageSize)
@@ -34,6 +31,7 @@ internal sealed class CommunityQuery : ICommunityQuery
 
         // Load non-deleted threads for the page of communities.
         var allCandidateThreads = await _db.Threads
+            .AsNoTracking()
             .Where(t => communityIds.Contains(t.CommunityId) && t.DeletedAt == null)
             .ToListAsync(cancellationToken);
 
@@ -77,7 +75,7 @@ internal sealed class CommunityQuery : ICommunityQuery
             .GroupBy(t => t.CommunityId)
             .ToDictionary(
                 g => g.Key,
-                g => g.OrderByDescending(t => _hotRankingEngine.CalculateHotScore(
+                g => g.OrderByDescending(t => HotRankingEngine.CalculateHotScore(
                     t.CreatedAt,
                     t.VoteScore,
                     commentCounts.GetValueOrDefault(t.Id.Value, 0)
@@ -103,6 +101,7 @@ internal sealed class CommunityQuery : ICommunityQuery
         var projections = allUserIds.Count == 0
             ? new Dictionary<Guid, UserProjection>()
             : (await _db.UserProjections
+                .AsNoTracking()
                 .Where(p => allUserIds.Contains(p.Id))
                 .ToListAsync(cancellationToken))
                 .ToDictionary(p => p.Id.Value);
@@ -114,7 +113,7 @@ internal sealed class CommunityQuery : ICommunityQuery
                 CommunityActivitySnapshot? activity = null;
                 if (hottestByCommunity.TryGetValue(c.Id, out var thread))
                 {
-                    var hotScore = _hotRankingEngine.CalculateHotScore(
+                    var hotScore = HotRankingEngine.CalculateHotScore(
                         thread.CreatedAt,
                         thread.VoteScore,
                         commentCounts.GetValueOrDefault(thread.Id.Value, 0));
@@ -151,21 +150,21 @@ internal sealed class CommunityQuery : ICommunityQuery
                     CommentCount: commentCountByCommunity.GetValueOrDefault(c.Id.Value, 0));
             })
             .OrderByDescending(x => x.Activity?.HotScore ?? double.MinValue)
-            .Select(x => CommunityMapper.ToResponse(x.Community, x.Activity, x.MemberCount, x.ThreadCount, x.CommentCount))
+            .Select(x => CommunityMapper.ToDto(x.Community, x.Activity, x.MemberCount, x.ThreadCount, x.CommentCount))
             .ToList();
 
-        return new CommunityListResponse(responses, total);
+        return new CommunityListDto(responses, total);
     }
 
-    public async Task<CommunityResponse?> GetDetailAsync(CommunityDetailRequest request, CancellationToken cancellationToken = default)
+    public async Task<CommunityDto?> GetDetailAsync(CommunityDetailCommand request, CancellationToken cancellationToken = default)
     {
-        var community = await _db.Communities.FirstOrDefaultAsync(c => c.Id == new CommunityId(request.CommunityId), cancellationToken);
-        return community is null ? null : CommunityMapper.ToResponse(community);
+        var community = await _db.Communities.AsNoTracking().FirstOrDefaultAsync(c => c.Id == new CommunityId(request.CommunityId), cancellationToken);
+        return community is null ? null : CommunityMapper.ToDto(community);
     }
 
-    public async Task<CommunityResponse?> GetBySlugAsync(CommunityBySlugRequest request, CancellationToken cancellationToken = default)
+    public async Task<CommunityDto?> GetBySlugAsync(CommunityBySlugCommand request, CancellationToken cancellationToken = default)
     {
-        var community = await _db.Communities.FirstOrDefaultAsync(c => c.Slug == request.Slug, cancellationToken);
-        return community is null ? null : CommunityMapper.ToResponse(community);
+        var community = await _db.Communities.AsNoTracking().FirstOrDefaultAsync(c => c.Slug == request.Slug, cancellationToken);
+        return community is null ? null : CommunityMapper.ToDto(community);
     }
 }

@@ -1,7 +1,8 @@
-using Forum.Application.Contracts;
+using Forum.Application.Commands;
+using Forum.Application.Dtos;
 using Forum.Application.Mappers;
 using Forum.Domain.Aggregates;
-using Forum.Domain.Repositories;
+using Forum.Application.Repositories;
 using Forum.Domain.ValueObjects;
 
 namespace Forum.Application.Managers;
@@ -22,52 +23,56 @@ internal sealed class VoteManager : IVoteManager
         _commentRepository = commentRepository;
     }
 
-    public async Task<VoteResponse> CastAsync(CastVoteRequest request, CancellationToken cancellationToken = default)
+    public async Task<VoteDto> CastAsync(CastVoteCommand command, CancellationToken cancellationToken = default)
     {
         var existing = await _voteRepository.GetByUserAndTargetAsync(
-            new UserId(request.UserId), request.TargetType, request.TargetId, cancellationToken);
+            new UserId(command.UserId), command.TargetType, command.TargetId, cancellationToken);
 
         if (existing is not null)
         {
-            if (existing.Direction == request.Direction)
-                return VoteMapper.ToResponse(existing);
+            if (existing.Direction == command.Direction)
+                return VoteMapper.ToDto(existing);
 
-            var delta = (int)request.Direction - (int)existing.Direction;
-            existing.SwitchDirection(request.Direction, DateTime.UtcNow);
+            var delta = (int)command.Direction - (int)existing.Direction;
+            existing.SwitchDirection(command.Direction, DateTime.UtcNow);
             await _voteRepository.UpdateAsync(existing, cancellationToken);
-            await AdjustTargetScoreAsync(request.TargetType, request.TargetId, delta, cancellationToken);
-            return VoteMapper.ToResponse(existing);
+            await AdjustTargetScoreAsync(command.TargetType, command.TargetId, delta, cancellationToken);
+            await _voteRepository.CommitAsync(cancellationToken);
+            return VoteMapper.ToDto(existing);
         }
 
-        var vote = Vote.Create(request.TargetType, request.TargetId, new UserId(request.UserId), request.Direction);
+        var vote = Vote.Create(command.TargetType, command.TargetId, new UserId(command.UserId), command.Direction);
         await _voteRepository.AddAsync(vote, cancellationToken);
-        await AdjustTargetScoreAsync(request.TargetType, request.TargetId, (int)request.Direction, cancellationToken);
-        return VoteMapper.ToResponse(vote);
+        await AdjustTargetScoreAsync(command.TargetType, command.TargetId, (int)command.Direction, cancellationToken);
+        await _voteRepository.CommitAsync(cancellationToken);
+        return VoteMapper.ToDto(vote);
     }
 
-    public async Task<VoteResponse?> SwitchAsync(SwitchVoteRequest request, CancellationToken cancellationToken = default)
+    public async Task<VoteDto?> SwitchAsync(SwitchVoteCommand command, CancellationToken cancellationToken = default)
     {
-        var vote = await _voteRepository.GetByIdAsync(new VoteId(request.VoteId), cancellationToken);
+        var vote = await _voteRepository.GetByIdAsync(new VoteId(command.VoteId), cancellationToken);
         if (vote is null)
             return null;
 
-        var delta = (int)request.Direction - (int)vote.Direction;
-        vote.SwitchDirection(request.Direction, DateTime.UtcNow);
+        var delta = (int)command.Direction - (int)vote.Direction;
+        vote.SwitchDirection(command.Direction, DateTime.UtcNow);
         await _voteRepository.UpdateAsync(vote, cancellationToken);
         await AdjustTargetScoreAsync(vote.TargetType, vote.TargetId, delta, cancellationToken);
-        return VoteMapper.ToResponse(vote);
+        await _voteRepository.CommitAsync(cancellationToken);
+        return VoteMapper.ToDto(vote);
     }
 
-    public async Task<VoteResponse?> RetractAsync(RetractVoteRequest request, CancellationToken cancellationToken = default)
+    public async Task<VoteDto?> RetractAsync(RetractVoteCommand command, CancellationToken cancellationToken = default)
     {
-        var vote = await _voteRepository.GetByIdAsync(new VoteId(request.VoteId), cancellationToken);
+        var vote = await _voteRepository.GetByIdAsync(new VoteId(command.VoteId), cancellationToken);
         if (vote is null)
             return null;
 
-        var response = VoteMapper.ToResponse(vote);
+        var dto = VoteMapper.ToDto(vote);
         await _voteRepository.RemoveAsync(vote.Id, cancellationToken);
         await AdjustTargetScoreAsync(vote.TargetType, vote.TargetId, -(int)vote.Direction, cancellationToken);
-        return response;
+        await _voteRepository.CommitAsync(cancellationToken);
+        return dto;
     }
 
     private async Task AdjustTargetScoreAsync(VoteTargetType targetType, Guid targetId, int delta, CancellationToken cancellationToken)
@@ -93,6 +98,4 @@ internal sealed class VoteManager : IVoteManager
             }
         }
     }
-
 }
-

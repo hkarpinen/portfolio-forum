@@ -1,10 +1,11 @@
-using Forum.Application.Contracts;
+using Forum.Application.Commands;
+using Forum.Application.Dtos;
 
 namespace Forum.Application.Managers;
 
 public interface IModerationManager
 {
-    Task<BanResponse> BanAsync(BanUserRequest request, CancellationToken cancellationToken = default);
-    Task<BanResponse?> UnbanAsync(UnbanUserRequest request, CancellationToken cancellationToken = default);
-    Task<ModerationLogEntryResponse> LogAsync(LogModerationActionRequest request, CancellationToken cancellationToken = default);
+    Task<BanDto> BanAsync(BanUserCommand command, CancellationToken cancellationToken = default);
+    Task<BanDto?> UnbanAsync(UnbanUserCommand command, CancellationToken cancellationToken = default);
+    Task<ModerationLogEntryDto> LogAsync(LogModerationActionCommand command, CancellationToken cancellationToken = default);
 }

@@ -1,5 +1,5 @@
 using Forum.Application.Queries;
-using Forum.Domain.Repositories;
+using Forum.Application.Repositories;
 using Infrastructure.Media;
 using Infrastructure.Messaging;
 using Infrastructure.Messaging.Consumers;
@@ -65,13 +65,11 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<ICommentRepository, CommentRepository>();
         services.AddScoped<IVoteRepository, VoteRepository>();
         services.AddScoped<IModerationLogRepository, ModerationLogRepository>();
-        services.AddScoped<IUserProjectionRepository, UserProjectionRepository>();
         services.AddScoped<IForumProfileRepository, ForumProfileRepository>();
 
         services.AddScoped<ICommunityQuery, CommunityQuery>();
         services.AddScoped<IThreadQuery, ThreadQuery>();
         services.AddScoped<ICommentQuery, CommentQuery>();
-        services.AddScoped<ISearchQuery, SearchQuery>();
         services.AddScoped<IForumProfileQuery, ForumProfileQuery>();
         services.AddScoped<IMembershipQuery, MembershipQuery>();
         services.AddScoped<IModerationQuery, ModerationQuery>();

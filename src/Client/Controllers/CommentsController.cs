@@ -1,9 +1,8 @@
+using Forum.Application.Commands;
 using Forum.Application.Managers;
 using Forum.Application.Queries;
 using Client.Authorization;
-using Client.Contracts;
 using Client.Extensions;
-using Forum.Application.Contracts;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -27,10 +26,11 @@ public sealed class CommentsController : ControllerBase
     [HttpPost]
     [Authorize(Policy = ForumAuthorizationPolicies.MemberOrAbove)]
     [EnableRateLimiting("write")]
-    public async Task<IActionResult> Create([FromBody] CreateCommentDto request, CancellationToken cancellationToken)
+    public async Task<IActionResult> Create([FromBody] CreateCommentCommand request,
+        CancellationToken cancellationToken)
     {
         var commentId = await _commentWorkflowManager.CreateAsync(
-            new CreateCommentRequest(request.ThreadId, User.GetRequiredUserId(), request.Content, request.ParentCommentId),
+            request with { AuthorId = User.GetRequiredUserId() },
             cancellationToken);
 
         return CreatedAtAction(nameof(ListTree), new { threadId = request.ThreadId }, new { commentId });
@@ -39,9 +39,10 @@ public sealed class CommentsController : ControllerBase
     [HttpPut("{commentId:guid}")]
     [Authorize(Policy = ForumAuthorizationPolicies.MemberOrAbove)]
     [EnableRateLimiting("write")]
-    public async Task<IActionResult> Edit([FromRoute] Guid commentId, [FromBody] EditCommentDto request, CancellationToken cancellationToken)
+    public async Task<IActionResult> Edit([FromRoute] Guid commentId, [FromBody] EditCommentCommand request,
+        CancellationToken cancellationToken)
     {
-        var found = await _commentWorkflowManager.EditAsync(new EditCommentRequest(commentId, request.Content), cancellationToken);
+        var found = await _commentWorkflowManager.EditAsync(request with { CommentId = commentId }, cancellationToken);
         return found ? Ok() : NotFound();
     }
 
@@ -50,7 +51,7 @@ public sealed class CommentsController : ControllerBase
     [EnableRateLimiting("write")]
     public async Task<IActionResult> Delete([FromRoute] Guid commentId, CancellationToken cancellationToken)
     {
-        var found = await _commentWorkflowManager.DeleteAsync(new DeleteCommentRequest(commentId), cancellationToken);
+        var found = await _commentWorkflowManager.DeleteAsync(new DeleteCommentCommand(commentId), cancellationToken);
         return found ? NoContent() : NotFound();
     }
 
@@ -58,7 +59,7 @@ public sealed class CommentsController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> ListTree([FromRoute] Guid threadId, CancellationToken cancellationToken)
     {
-        var result = await _commentQuery.ListTreeAsync(new ListCommentTreeRequest(threadId), cancellationToken);
+        var result = await _commentQuery.ListTreeAsync(new ListCommentTreeCommand(threadId), cancellationToken);
         return Ok(result);
     }
 }

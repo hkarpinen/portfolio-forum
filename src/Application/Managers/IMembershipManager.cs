@@ -1,12 +1,13 @@
-using Forum.Application.Contracts;
+using Forum.Application.Commands;
+using Forum.Application.Dtos;
 
 namespace Forum.Application.Managers;
 
 public interface IMembershipManager
 {
-    Task<MembershipResponse> JoinAsync(JoinCommunityRequest request, CancellationToken cancellationToken = default);
-    Task<MembershipResponse> InviteAsync(InviteMemberRequest request, CancellationToken cancellationToken = default);
-    Task<MembershipResponse?> LeaveAsync(LeaveCommunityRequest request, CancellationToken cancellationToken = default);
-    Task<MembershipResponse?> AppointModeratorAsync(AppointModeratorRequest request, CancellationToken cancellationToken = default);
-    Task<MembershipResponse?> RemoveModeratorAsync(RemoveModeratorRequest request, CancellationToken cancellationToken = default);
+    Task<MembershipDto> JoinAsync(JoinCommunityCommand command, CancellationToken cancellationToken = default);
+    Task<MembershipDto> InviteAsync(InviteMemberCommand command, CancellationToken cancellationToken = default);
+    Task<MembershipDto?> LeaveAsync(LeaveCommunityCommand command, CancellationToken cancellationToken = default);
+    Task<MembershipDto?> AppointModeratorAsync(AppointModeratorCommand command, CancellationToken cancellationToken = default);
+    Task<MembershipDto?> RemoveModeratorAsync(RemoveModeratorCommand command, CancellationToken cancellationToken = default);
 }

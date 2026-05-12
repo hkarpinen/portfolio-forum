@@ -1,10 +1,11 @@
-using Forum.Application.Contracts;
+using Forum.Application.Commands;
+using Forum.Application.Dtos;
 
 namespace Forum.Application.Managers;
 
 public interface IVoteManager
 {
-    Task<VoteResponse> CastAsync(CastVoteRequest request, CancellationToken cancellationToken = default);
-    Task<VoteResponse?> SwitchAsync(SwitchVoteRequest request, CancellationToken cancellationToken = default);
-    Task<VoteResponse?> RetractAsync(RetractVoteRequest request, CancellationToken cancellationToken = default);
+    Task<VoteDto> CastAsync(CastVoteCommand command, CancellationToken cancellationToken = default);
+    Task<VoteDto?> SwitchAsync(SwitchVoteCommand command, CancellationToken cancellationToken = default);
+    Task<VoteDto?> RetractAsync(RetractVoteCommand command, CancellationToken cancellationToken = default);
 }

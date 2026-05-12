@@ -1,11 +1,11 @@
-using Client.Contracts;
+using Forum.Application.Commands;
 using FluentValidation;
 
 namespace Client.Validators;
 
-public sealed class CastVoteDtoValidator : AbstractValidator<CastVoteDto>
+public sealed class CastVoteCommandValidator : AbstractValidator<CastVoteCommand>
 {
-    public CastVoteDtoValidator()
+    public CastVoteCommandValidator()
     {
         RuleFor(x => x.TargetId)
             .NotEmpty();

@@ -1,11 +1,11 @@
-using Client.Contracts;
+using Forum.Application.Commands;
 using FluentValidation;
 
 namespace Client.Validators;
 
-public sealed class CreateThreadDtoValidator : AbstractValidator<CreateThreadDto>
+public sealed class CreateThreadCommandValidator : AbstractValidator<CreateThreadCommand>
 {
-    public CreateThreadDtoValidator()
+    public CreateThreadCommandValidator()
     {
         RuleFor(x => x.CommunitySlug)
             .NotEmpty();

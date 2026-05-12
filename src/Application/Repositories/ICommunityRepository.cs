@@ -1,7 +1,7 @@
 using Forum.Domain.Aggregates;
 using Forum.Domain.ValueObjects;
 
-namespace Forum.Domain.Repositories;
+namespace Forum.Application.Repositories;
 
 public interface ICommunityRepository
 {
@@ -11,4 +11,5 @@ public interface ICommunityRepository
     Task AddAsync(Community community, CancellationToken cancellationToken = default);
     Task UpdateAsync(Community community, CancellationToken cancellationToken = default);
     Task DeleteAsync(CommunityId id, CancellationToken cancellationToken = default);
+    Task CommitAsync(CancellationToken cancellationToken = default);
 }

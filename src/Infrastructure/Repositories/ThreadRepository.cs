@@ -1,5 +1,5 @@
 using Forum.Domain.Aggregates;
-using Forum.Domain.Repositories;
+using Forum.Application.Repositories;
 using Forum.Domain.ValueObjects;
 using Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -16,34 +16,26 @@ internal sealed class ThreadRepository : IThreadRepository
     }
 
     public Task<ForumThread?> GetByIdAsync(ThreadId id, CancellationToken cancellationToken = default)
-        => _dbContext.Threads
-            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+        => _dbContext.Threads.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
 
     public async Task AddAsync(ForumThread thread, CancellationToken cancellationToken = default)
     {
         await _dbContext.Threads.AddAsync(thread, cancellationToken);
-        foreach (var e in thread.DomainEvents) _dbContext.AddToOutbox(e);
-        thread.ClearDomainEvents();
-        await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task UpdateAsync(ForumThread thread, CancellationToken cancellationToken = default)
+    public Task UpdateAsync(ForumThread thread, CancellationToken cancellationToken = default)
     {
         _dbContext.Threads.Update(thread);
-        foreach (var e in thread.DomainEvents) _dbContext.AddToOutbox(e);
-        thread.ClearDomainEvents();
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        return Task.CompletedTask;
     }
 
     public async Task DeleteAsync(ThreadId id, CancellationToken cancellationToken = default)
     {
         var thread = await _dbContext.Threads.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
-        if (thread is null)
-        {
-            return;
-        }
-
+        if (thread is null) return;
         _dbContext.Threads.Remove(thread);
-        await _dbContext.SaveChangesAsync(cancellationToken);
     }
+
+    public Task CommitAsync(CancellationToken cancellationToken = default)
+        => _dbContext.SaveChangesAsync(cancellationToken);
 }

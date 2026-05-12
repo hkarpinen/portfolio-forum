@@ -1,7 +1,8 @@
-using Forum.Application.Contracts;
+using Forum.Application.Commands;
+using Forum.Application.Dtos;
 using Forum.Application.Mappers;
 using Forum.Domain.Aggregates;
-using Forum.Domain.Repositories;
+using Forum.Application.Repositories;
 using Forum.Domain.ValueObjects;
 
 namespace Forum.Application.Managers;
@@ -15,69 +16,69 @@ internal sealed class MembershipManager : IMembershipManager
         _membershipRepository = membershipRepository;
     }
 
-    public async Task<MembershipResponse> JoinAsync(JoinCommunityRequest request, CancellationToken cancellationToken = default)
+    public async Task<MembershipDto> JoinAsync(JoinCommunityCommand command, CancellationToken cancellationToken = default)
     {
         var existing = await _membershipRepository.GetByUserAndCommunityAsync(
-            new UserId(request.UserId), new CommunityId(request.CommunityId), cancellationToken);
+            new UserId(command.UserId), new CommunityId(command.CommunityId), cancellationToken);
 
         if (existing is not null)
-            return ForumMembershipMapper.ToResponse(existing, isInvite: false);
+            return ForumMembershipMapper.ToDto(existing, isInvite: false);
 
         var membership = CommunityMembership.Create(
-            new CommunityId(request.CommunityId),
-            new UserId(request.UserId));
+            new CommunityId(command.CommunityId),
+            new UserId(command.UserId));
 
         await _membershipRepository.AddAsync(membership, cancellationToken);
-        return ForumMembershipMapper.ToResponse(membership, isInvite: false);
+        await _membershipRepository.CommitAsync(cancellationToken);
+        return ForumMembershipMapper.ToDto(membership, isInvite: false);
     }
 
-    public async Task<MembershipResponse> InviteAsync(InviteMemberRequest request, CancellationToken cancellationToken = default)
+    public async Task<MembershipDto> InviteAsync(InviteMemberCommand command, CancellationToken cancellationToken = default)
     {
         var membership = CommunityMembership.Create(
-            new CommunityId(request.CommunityId),
-            new UserId(request.UserId));
+            new CommunityId(command.CommunityId),
+            new UserId(command.UserId));
 
         await _membershipRepository.AddAsync(membership, cancellationToken);
-        return ForumMembershipMapper.ToResponse(membership, isInvite: true);
+        await _membershipRepository.CommitAsync(cancellationToken);
+        return ForumMembershipMapper.ToDto(membership, isInvite: true);
     }
 
-    public async Task<MembershipResponse?> LeaveAsync(LeaveCommunityRequest request, CancellationToken cancellationToken = default)
+    public async Task<MembershipDto?> LeaveAsync(LeaveCommunityCommand command, CancellationToken cancellationToken = default)
     {
-        var membership = await _membershipRepository.GetByIdAsync(new MembershipId(request.MembershipId), cancellationToken);
+        var membership = await _membershipRepository.GetByIdAsync(new MembershipId(command.MembershipId), cancellationToken);
         if (membership is null)
             return null;
 
-        // Capture response before hard-deleting the row
-        var response = ForumMembershipMapper.ToResponse(membership, isInvite: false);
+        var dto = ForumMembershipMapper.ToDto(membership, isInvite: false);
         await _membershipRepository.DeleteAsync(membership.Id, cancellationToken);
-        return response;
+        await _membershipRepository.CommitAsync(cancellationToken);
+        return dto;
     }
 
-    public async Task<MembershipResponse?> AppointModeratorAsync(AppointModeratorRequest request, CancellationToken cancellationToken = default)
+    public async Task<MembershipDto?> AppointModeratorAsync(AppointModeratorCommand command, CancellationToken cancellationToken = default)
     {
-        var membership = await _membershipRepository.GetByIdAsync(new MembershipId(request.MembershipId), cancellationToken);
+        var membership = await _membershipRepository.GetByIdAsync(new MembershipId(command.MembershipId), cancellationToken);
 
         if (membership is null)
-        {
             return null;
-        }
 
         membership.AppointModerator(DateTime.UtcNow);
         await _membershipRepository.UpdateAsync(membership, cancellationToken);
-        return ForumMembershipMapper.ToResponse(membership, isInvite: false);
+        await _membershipRepository.CommitAsync(cancellationToken);
+        return ForumMembershipMapper.ToDto(membership, isInvite: false);
     }
 
-    public async Task<MembershipResponse?> RemoveModeratorAsync(RemoveModeratorRequest request, CancellationToken cancellationToken = default)
+    public async Task<MembershipDto?> RemoveModeratorAsync(RemoveModeratorCommand command, CancellationToken cancellationToken = default)
     {
-        var membership = await _membershipRepository.GetByIdAsync(new MembershipId(request.MembershipId), cancellationToken);
+        var membership = await _membershipRepository.GetByIdAsync(new MembershipId(command.MembershipId), cancellationToken);
 
         if (membership is null)
-        {
             return null;
-        }
 
         membership.RemoveModerator(DateTime.UtcNow);
         await _membershipRepository.UpdateAsync(membership, cancellationToken);
-        return ForumMembershipMapper.ToResponse(membership, isInvite: false);
+        await _membershipRepository.CommitAsync(cancellationToken);
+        return ForumMembershipMapper.ToDto(membership, isInvite: false);
     }
 }

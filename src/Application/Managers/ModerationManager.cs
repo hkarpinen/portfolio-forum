@@ -1,7 +1,8 @@
-using Forum.Application.Contracts;
+using Forum.Application.Commands;
+using Forum.Application.Dtos;
 using Forum.Application.Mappers;
 using Forum.Domain.Aggregates;
-using Forum.Domain.Repositories;
+using Forum.Application.Repositories;
 using Forum.Domain.ValueObjects;
 
 namespace Forum.Application.Managers;
@@ -17,34 +18,33 @@ internal sealed class ModerationManager : IModerationManager
         _moderationLogRepository = moderationLogRepository;
     }
 
-    public async Task<BanResponse> BanAsync(BanUserRequest request, CancellationToken cancellationToken = default)
+    public async Task<BanDto> BanAsync(BanUserCommand command, CancellationToken cancellationToken = default)
     {
         var ban = CommunityBan.Create(
-            new CommunityId(request.CommunityId),
-            new UserId(request.UserId),
-            request.Reason);
+            new CommunityId(command.CommunityId),
+            new UserId(command.UserId),
+            command.Reason);
 
         await _banRepository.AddAsync(ban, cancellationToken);
 
         var log = ModerationLog.Create(
-            new CommunityId(request.CommunityId),
+            new CommunityId(command.CommunityId),
             ModerationAction.BanUser,
-            new UserId(request.PerformedByUserId),
-            new UserId(request.UserId),
-            request.Reason);
+            new UserId(command.PerformedByUserId),
+            new UserId(command.UserId),
+            command.Reason);
 
         await _moderationLogRepository.AddAsync(log, cancellationToken);
-        return ModerationMapper.ToResponse(ban);
+        await _banRepository.CommitAsync(cancellationToken);
+        return ModerationMapper.ToDto(ban);
     }
 
-    public async Task<BanResponse?> UnbanAsync(UnbanUserRequest request, CancellationToken cancellationToken = default)
+    public async Task<BanDto?> UnbanAsync(UnbanUserCommand command, CancellationToken cancellationToken = default)
     {
-        var ban = await _banRepository.GetByIdAsync(new BanId(request.BanId), cancellationToken);
+        var ban = await _banRepository.GetByIdAsync(new BanId(command.BanId), cancellationToken);
 
         if (ban is null)
-        {
             return null;
-        }
 
         ban.Unban(DateTime.UtcNow);
         await _banRepository.RemoveAsync(ban, cancellationToken);
@@ -52,28 +52,30 @@ internal sealed class ModerationManager : IModerationManager
         var log = ModerationLog.Create(
             ban.CommunityId,
             ModerationAction.UnbanUser,
-            new UserId(request.PerformedByUserId),
+            new UserId(command.PerformedByUserId),
             ban.UserId,
             null);
 
         await _moderationLogRepository.AddAsync(log, cancellationToken);
-        return ModerationMapper.ToResponse(ban);
+        await _banRepository.CommitAsync(cancellationToken);
+        return ModerationMapper.ToDto(ban);
     }
 
-    public async Task<ModerationLogEntryResponse> LogAsync(LogModerationActionRequest request, CancellationToken cancellationToken = default)
+    public async Task<ModerationLogEntryDto> LogAsync(LogModerationActionCommand command, CancellationToken cancellationToken = default)
     {
-        var targetUserId = request.TargetUserId.HasValue
-            ? new UserId(request.TargetUserId.Value)
+        var targetUserId = command.TargetUserId.HasValue
+            ? new UserId(command.TargetUserId.Value)
             : null;
 
         var log = ModerationLog.Create(
-            new CommunityId(request.CommunityId),
-            request.Action,
-            new UserId(request.PerformedByUserId),
+            new CommunityId(command.CommunityId),
+            command.Action,
+            new UserId(command.PerformedByUserId),
             targetUserId,
-            request.TargetContent);
+            command.TargetContent);
 
         await _moderationLogRepository.AddAsync(log, cancellationToken);
-        return ModerationMapper.ToResponse(log);
+        await _moderationLogRepository.CommitAsync(cancellationToken);
+        return ModerationMapper.ToDto(log);
     }
 }

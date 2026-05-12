@@ -1,5 +1,5 @@
 using Forum.Domain.Aggregates;
-using Forum.Domain.Repositories;
+using Forum.Application.Repositories;
 using Forum.Domain.ValueObjects;
 using Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -16,14 +16,13 @@ internal sealed class ModerationLogRepository : IModerationLogRepository
     }
 
     public Task<ModerationLog?> GetByIdAsync(LogId id, CancellationToken cancellationToken = default)
-        => _dbContext.ModerationLogs
-            .FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
+        => _dbContext.ModerationLogs.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
 
     public async Task AddAsync(ModerationLog log, CancellationToken cancellationToken = default)
     {
         await _dbContext.ModerationLogs.AddAsync(log, cancellationToken);
-        foreach (var e in log.DomainEvents) _dbContext.AddToOutbox(e);
-        log.ClearDomainEvents();
-        await _dbContext.SaveChangesAsync(cancellationToken);
     }
+
+    public Task CommitAsync(CancellationToken cancellationToken = default)
+        => _dbContext.SaveChangesAsync(cancellationToken);
 }
