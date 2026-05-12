@@ -1,11 +1,11 @@
-using Forum.Application.Contracts;
+using Forum.Application.Dtos;
 using Forum.Domain.Aggregates;
 
 namespace Forum.Application.Mappers;
 
 public static class ModerationMapper
 {
-    public static BanResponse ToResponse(CommunityBan ban) => new(
+    public static BanDto ToDto(CommunityBan ban) => new(
         ban.Id.Value,
         ban.CommunityId.Value,
         ban.UserId.Value,
@@ -13,7 +13,7 @@ public static class ModerationMapper
         ban.Reason,
         ban.UnbannedAt);
 
-    public static ModerationLogEntryResponse ToResponse(ModerationLog log) => new(
+    public static ModerationLogEntryDto ToDto(ModerationLog log) => new(
         log.Id.Value,
         log.CommunityId.Value,
         log.Action,

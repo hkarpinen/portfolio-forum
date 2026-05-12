@@ -1,19 +1,19 @@
-using Forum.Application.Contracts;
-using Forum.Domain.ReadModels;
+using Forum.Application.Dtos;
 
 namespace Forum.Application.Mappers;
 
 public static class CommentMapper
 {
-    public static CommentResponse ToResponse(
+    public static CommentDto ToDto(
         Forum.Domain.Aggregates.Comment comment,
-        UserProjection? proj,
+        string? authorName,
+        string? authorAvatarUrl,
         int voteScore) => new(
         comment.Id.Value,
         comment.ThreadId.Value,
         comment.AuthorId.Value,
-        proj?.EffectiveName,
-        proj?.AvatarUrl,
+        authorName,
+        authorAvatarUrl,
         comment.Content,
         comment.CreatedAt,
         comment.EditedAt,

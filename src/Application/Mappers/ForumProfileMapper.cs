@@ -1,15 +1,14 @@
-using Forum.Application.Contracts;
+using Forum.Application.Dtos;
 using Forum.Domain.Aggregates;
-using Forum.Domain.ReadModels;
 
 namespace Forum.Application.Mappers;
 
 public static class ForumProfileMapper
 {
-    public static ForumProfileResponse ToResponse(ForumProfile profile, UserProjection? proj = null) => new(
+    public static ForumProfileDto ToDto(ForumProfile profile) => new(
         profile.UserId.Value,
-        proj?.EffectiveName,
-        proj?.AvatarUrl,
+        null,
+        null,
         profile.Bio,
         profile.Signature,
         profile.CreatedAt,

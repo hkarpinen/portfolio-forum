@@ -1,11 +1,11 @@
-using Forum.Application.Contracts;
+using Forum.Application.Dtos;
 using Forum.Domain.Aggregates;
 
 namespace Forum.Application.Mappers;
 
 public static class VoteMapper
 {
-    public static VoteResponse ToResponse(Vote vote) => new(
+    public static VoteDto ToDto(Vote vote) => new(
         vote.Id.Value,
         vote.TargetType,
         vote.TargetId,

@@ -1,12 +1,11 @@
-using Forum.Application.Contracts;
+using Forum.Application.Dtos;
 using Forum.Domain.Aggregates;
-using Forum.Domain.ReadModels;
 
 namespace Forum.Application.Mappers;
 
 public static class CommunityMapper
 {
-    public static CommunityResponse ToResponse(
+    public static CommunityDto ToDto(
         Community c,
         CommunityActivitySnapshot? activity = null,
         int memberCount = 0,
