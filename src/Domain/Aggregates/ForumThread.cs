@@ -20,10 +20,11 @@ public sealed class ForumThread : IAggregateRoot
     public bool IsPinned { get; private set; }
     public DateTime? DeletedAt { get; private set; }
     public int VoteScore { get; private set; }
+    public string? Flair { get; private set; }
 
     private ForumThread() { }
 
-    public static ForumThread Create(CommunityId communityId, string communitySlug, UserId authorId, string title, string? content)
+    public static ForumThread Create(CommunityId communityId, string communitySlug, UserId authorId, string title, string? content, string? flair = null)
     {
         if (string.IsNullOrWhiteSpace(title))
             throw new ArgumentException("Title cannot be empty.", nameof(title));
@@ -35,13 +36,14 @@ public sealed class ForumThread : IAggregateRoot
             AuthorId = authorId,
             Title = title,
             Content = content,
+            Flair = flair,
             CreatedAt = DateTime.UtcNow
         };
         thread._domainEvents.Add(new ThreadCreated(thread.Id, communityId, communitySlug, authorId, title, thread.CreatedAt));
         return thread;
     }
 
-    public void Edit(string title, string? content, DateTime editedAt)
+    public void Edit(string title, string? content, string? flair, DateTime editedAt)
     {
         if (DeletedAt.HasValue)
             throw new InvalidOperationException("Cannot edit a deleted thread.");
@@ -52,6 +54,7 @@ public sealed class ForumThread : IAggregateRoot
 
         Title = title;
         Content = content;
+        Flair = flair;
         EditedAt = editedAt;
         _domainEvents.Add(new ThreadEdited(Id, title, content, editedAt));
     }

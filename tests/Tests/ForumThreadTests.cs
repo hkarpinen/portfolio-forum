@@ -61,7 +61,7 @@ public class ForumThreadTests
         var thread = CreateThread();
 
         // Act
-        thread.Edit("New Title", "New Content", DateTime.UtcNow);
+        thread.Edit("New Title", "New Content", null, DateTime.UtcNow);
 
         // Assert
         Assert.Equal("New Title", thread.Title);
@@ -76,7 +76,7 @@ public class ForumThreadTests
         var thread = CreateThread();
 
         // Act
-        thread.Edit("New Title", "Content", DateTime.UtcNow);
+        thread.Edit("New Title", "Content", null, DateTime.UtcNow);
 
         // Assert
         Assert.Contains(thread.DomainEvents, e => e is ThreadEdited);
@@ -151,7 +151,7 @@ public class ForumThreadTests
     {
         var thread = CreateThread();
         thread.Lock(DateTime.UtcNow);
-        Assert.Throws<InvalidOperationException>(() => thread.Edit("New", null, DateTime.UtcNow));
+        Assert.Throws<InvalidOperationException>(() => thread.Edit("New", null, null, DateTime.UtcNow));
     }
 
     [Fact]

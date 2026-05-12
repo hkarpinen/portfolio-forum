@@ -39,7 +39,7 @@ internal sealed class ThreadQuery : IThreadQuery
             var hotScore = HotRankingEngine.CalculateHotScore(t.CreatedAt, t.VoteScore, 0);
             return new ThreadSummaryDto(
                 t.Id.Value, t.CommunityId.Value, t.AuthorId.Value,
-                proj?.EffectiveName, proj?.AvatarUrl, t.Title,
+                proj?.EffectiveName, proj?.AvatarUrl, t.Title, t.Flair,
                 t.CreatedAt, hotScore, t.VoteScore);
         }).ToList();
 
@@ -55,7 +55,7 @@ internal sealed class ThreadQuery : IThreadQuery
         var hotScore = HotRankingEngine.CalculateHotScore(thread.CreatedAt, thread.VoteScore, 0);
         return new ThreadDto(
             thread.Id.Value, thread.CommunityId.Value, thread.AuthorId.Value,
-            proj?.EffectiveName, proj?.AvatarUrl, thread.Title, thread.Content,
+            proj?.EffectiveName, proj?.AvatarUrl, thread.Title, thread.Content, thread.Flair,
             thread.CreatedAt, thread.EditedAt, thread.IsLocked, thread.IsPinned,
             thread.DeletedAt, hotScore, thread.VoteScore);
     }
@@ -124,7 +124,7 @@ internal sealed class ThreadQuery : IThreadQuery
                 t.Id.Value, t.CommunityId.Value,
                 community?.Slug, community?.Name,
                 t.AuthorId.Value,
-                proj?.EffectiveName, proj?.AvatarUrl, t.Title,
+                proj?.EffectiveName, proj?.AvatarUrl, t.Title, t.Flair,
                 t.CreatedAt, hotScore, t.VoteScore, commentCount, t.IsPinned);
         }).ToList();
 
@@ -150,7 +150,7 @@ internal sealed class ThreadQuery : IThreadQuery
             var hotScore = HotRankingEngine.CalculateHotScore(t.CreatedAt, t.VoteScore, 0);
             return new ThreadSummaryDto(
                 t.Id.Value, t.CommunityId.Value, t.AuthorId.Value,
-                proj?.EffectiveName, proj?.AvatarUrl, t.Title,
+                proj?.EffectiveName, proj?.AvatarUrl, t.Title, t.Flair,
                 t.CreatedAt, hotScore, t.VoteScore);
         }).ToList();
         return new ThreadListDto(responses, total);

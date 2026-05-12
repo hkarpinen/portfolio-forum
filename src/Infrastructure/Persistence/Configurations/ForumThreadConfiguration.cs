@@ -54,6 +54,10 @@ internal sealed class ForumThreadConfiguration : IEntityTypeConfiguration<ForumT
             .HasDefaultValue(0)
             .IsRequired();
 
+        builder.Property(x => x.Flair)
+            .HasMaxLength(50)
+            .IsRequired(false);
+
         builder.Property<NpgsqlTsVector>("search_vector")
             .HasColumnType("tsvector")
             .HasComputedColumnSql("to_tsvector('english', coalesce(title, '') || ' ' || coalesce(content, ''))", stored: true);

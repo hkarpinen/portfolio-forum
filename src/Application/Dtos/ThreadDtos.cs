@@ -8,6 +8,7 @@ public sealed record ThreadDto(
     string? AuthorAvatarUrl,
     string Title,
     string? Content,
+    string? Flair,
     DateTime CreatedAt,
     DateTime? EditedAt,
     bool IsLocked,
@@ -30,6 +31,7 @@ public sealed record ThreadSummaryDto(
     string? AuthorDisplayName,
     string? AuthorAvatarUrl,
     string Title,
+    string? Flair,
     DateTime CreatedAt,
     double HotScore,
     int VoteScore);
@@ -45,6 +47,7 @@ public sealed record FeedThreadSummaryDto(
     string? AuthorDisplayName,
     string? AuthorAvatarUrl,
     string Title,
+    string? Flair,
     DateTime CreatedAt,
     double HotScore,
     int VoteScore,

@@ -27,7 +27,8 @@ internal sealed class ThreadWorkflowManager : IThreadWorkflowManager
             command.CommunitySlug,
             new UserId(command.AuthorId),
             command.Title,
-            command.Content);
+            command.Content,
+            command.Flair);
 
         await _threadRepository.AddAsync(thread, cancellationToken);
         await _threadRepository.CommitAsync(cancellationToken);
@@ -42,7 +43,7 @@ internal sealed class ThreadWorkflowManager : IThreadWorkflowManager
         if (SpamDetectionEngine.IsSpam(command.Content ?? command.Title, thread.AuthorId.Value))
             throw new InvalidOperationException("Content was rejected as spam.");
 
-        thread.Edit(command.Title, command.Content, DateTime.UtcNow);
+        thread.Edit(command.Title, command.Content, command.Flair, DateTime.UtcNow);
         await _threadRepository.UpdateAsync(thread, cancellationToken);
         await _threadRepository.CommitAsync(cancellationToken);
         return ThreadResponseFactory.ToMutation(thread);
