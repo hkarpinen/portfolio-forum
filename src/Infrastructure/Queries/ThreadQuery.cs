@@ -172,7 +172,7 @@ internal sealed class ThreadQuery : IThreadQuery
                 .ToListAsync(cancellationToken);
 
             results.AddRange(communities.Select(c => new SearchResultItem(
-                "community", c.Id.Value, c.Name, null, c.Id.Value, c.CreatedAt, 0)));
+                "community", c.Id.Value, c.Name, c.Description, c.Id.Value, c.Slug, c.Name, c.Slug, c.CreatedAt, 0)));
         }
 
         if (request.Scope is SearchScope.All or SearchScope.Threads)
@@ -189,10 +189,29 @@ internal sealed class ThreadQuery : IThreadQuery
                 "thread",
                 t.Id.Value,
                 t.Title,
-                t.Content != null && t.Content.Length > 120 ? t.Content[..120] + "…" : t.Content,
+                t.Content != null && t.Content.Length > 120 ? t.Content[..120] + "\u2026" : t.Content,
                 t.CommunityId.Value,
+                null,
+                null,
+                null,
                 t.CreatedAt,
                 HotRankingEngine.CalculateHotScore(t.CreatedAt, 0, 0))));
+
+            // Backfill community slugs
+            var communityIds = threads.Select(t => t.CommunityId).Distinct().ToList();
+            var communityMap = await _db.Communities
+                .Where(c => communityIds.Contains(c.Id))
+                .ToDictionaryAsync(c => c.Id, c => new { c.Slug, c.Name }, cancellationToken);
+
+            results = results
+                .Select(r => r.ItemType == "thread" && communityMap.ContainsKey(new CommunityId(r.CommunityId))
+                    ? r with
+                    {
+                        CommunitySlug = communityMap[new CommunityId(r.CommunityId)].Slug,
+                        CommunityName = communityMap[new CommunityId(r.CommunityId)].Name
+                    }
+                    : r)
+                .ToList();
         }
 
         var ordered = request.Sort == SearchSort.Newest

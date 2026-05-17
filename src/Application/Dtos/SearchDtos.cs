@@ -6,6 +6,9 @@ public sealed record SearchResultItem(
     string Title,
     string? Snippet,
     Guid CommunityId,
+    string? CommunitySlug,
+    string? CommunityName,
+    string? Slug,
     DateTime CreatedAt,
     double RankScore);
 
