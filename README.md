@@ -61,6 +61,24 @@ src/
 | `RabbitMq__Username` | RabbitMQ username |
 | `RabbitMq__Password` | RabbitMQ password |
 
+## CI/CD
+
+Two workflows run on push to `main`:
+
+| Workflow | File | What it does |
+|---|---|---|
+| **Build & Publish** | `.github/workflows/docker-publish.yml` | Runs `dotnet test`, builds the Docker image, pushes to `ghcr.io/hkarpinen/portfolio-forum:latest` |
+| **Deploy** | `.github/workflows/deploy.yml` | Triggers after Build & Publish succeeds; SSHes into the server, pulls the new image, and restarts only the `forum` container |
+
+### Required GitHub Actions secrets
+
+| Secret | Description |
+|---|---|
+| `DEPLOY_HOST` | VPS IP address or hostname |
+| `DEPLOY_USER` | SSH user on the server |
+| `DEPLOY_KEY` | Private SSH key for that user |
+| `DEPLOY_PATH` | Absolute path to the infra directory on the server |
+
 ## Docs
 
 - [Domain model & invariants](docs/Domain.md)
