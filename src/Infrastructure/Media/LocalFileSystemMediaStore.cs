@@ -20,17 +20,30 @@ internal sealed class LocalFileSystemMediaStore : IMediaStore
         Directory.CreateDirectory(_basePath);
     }
 
+    private static readonly Dictionary<string, string> MimeToExtension = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["image/jpeg"] = ".jpg",
+        ["image/png"]  = ".png",
+        ["image/webp"] = ".webp",
+        ["image/gif"]  = ".gif",
+    };
+
     public async Task<string> UploadAsync(
         Stream content,
         string fileName,
         string? contentType = null,
         CancellationToken cancellationToken = default)
     {
+        // Use the validated MIME type to derive the extension so an attacker cannot
+        // upload an .html (or any other non-image) file by setting a benign Content-Type.
+        var extension = contentType is not null && MimeToExtension.TryGetValue(contentType, out var ext)
+            ? ext
+            : ".bin";
+
         var safeName = Path.GetFileNameWithoutExtension(fileName)
             .Replace(" ", "-", StringComparison.Ordinal)
             .ToLowerInvariant();
 
-        var extension = Path.GetExtension(fileName);
         var storedName = $"{safeName}-{Guid.NewGuid():N}{extension}";
         var fullPath = Path.Combine(_basePath, storedName);
 
