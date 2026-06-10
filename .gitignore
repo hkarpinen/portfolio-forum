@@ -20,3 +20,7 @@ appsettings.Staging.json
 Thumbs.db
 
 **.lscache
+
+## Tooling
+.claude/
+__pycache__/

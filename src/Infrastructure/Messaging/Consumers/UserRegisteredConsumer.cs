@@ -1,8 +1,8 @@
+using Domain.Events;
 using Forum.Domain.Aggregates;
 using Infrastructure.Persistence.Projections;
 using Forum.Application.Repositories;
 using Forum.Domain.ValueObjects;
-using Infrastructure.Messaging.Events;
 using Infrastructure.Persistence;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
@@ -10,7 +10,7 @@ using Npgsql;
 
 namespace Infrastructure.Messaging.Consumers;
 
-internal sealed class UserRegisteredConsumer : IConsumer<UserRegisteredEvent>
+internal sealed class UserRegisteredConsumer : IConsumer<UserRegistered>
 {
     private readonly ForumDbContext _dbContext;
     private readonly IForumProfileRepository _forumProfileRepository;
@@ -21,7 +21,7 @@ internal sealed class UserRegisteredConsumer : IConsumer<UserRegisteredEvent>
         _forumProfileRepository = forumProfileRepository;
     }
 
-    public async Task Consume(ConsumeContext<UserRegisteredEvent> context)
+    public async Task Consume(ConsumeContext<UserRegistered> context)
     {
         var message = context.Message;
         if (await IsProcessedAsync(message.Id, context.CancellationToken))
@@ -57,7 +57,7 @@ internal sealed class UserRegisteredConsumer : IConsumer<UserRegisteredEvent>
             _dbContext.Entry(existing).CurrentValues.SetValues(projection);
         }
 
-        _dbContext.ProcessedEvents.Add(new ProcessedEvent(message.Id, nameof(UserRegisteredEvent), DateTime.UtcNow));
+        _dbContext.ProcessedEvents.Add(new ProcessedEvent(message.Id, nameof(UserRegistered), DateTime.UtcNow));
         try
         {
             await _dbContext.SaveChangesAsync(context.CancellationToken);

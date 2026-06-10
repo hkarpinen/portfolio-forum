@@ -1,7 +1,7 @@
+using Domain.Events;
 using Forum.Domain.Aggregates;
 using Infrastructure.Persistence.Projections;
 using Forum.Domain.ValueObjects;
-using Infrastructure.Messaging.Events;
 using Infrastructure.Persistence;
 using MassTransit;
 using Microsoft.EntityFrameworkCore;
@@ -9,7 +9,7 @@ using Npgsql;
 
 namespace Infrastructure.Messaging.Consumers;
 
-internal sealed class UserBannedConsumer : IConsumer<UserBannedEvent>
+internal sealed class UserBannedConsumer : IConsumer<UserBanned>
 {
     private readonly ForumDbContext _dbContext;
 
@@ -18,7 +18,7 @@ internal sealed class UserBannedConsumer : IConsumer<UserBannedEvent>
         _dbContext = dbContext;
     }
 
-    public async Task Consume(ConsumeContext<UserBannedEvent> context)
+    public async Task Consume(ConsumeContext<UserBanned> context)
     {
         var message = context.Message;
         if (await IsProcessedAsync(message.Id, context.CancellationToken))
@@ -47,7 +47,7 @@ internal sealed class UserBannedConsumer : IConsumer<UserBannedEvent>
             _dbContext.Entry(existing).CurrentValues.SetValues(projection);
         }
 
-        _dbContext.ProcessedEvents.Add(new ProcessedEvent(message.Id, nameof(UserBannedEvent), DateTime.UtcNow));
+        _dbContext.ProcessedEvents.Add(new ProcessedEvent(message.Id, nameof(UserBanned), DateTime.UtcNow));
 
         try
         {
