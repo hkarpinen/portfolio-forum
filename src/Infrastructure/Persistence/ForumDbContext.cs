@@ -14,6 +14,7 @@ public sealed class ForumDbContext : DbContext
     public DbSet<Comment> Comments => Set<Comment>();
     public DbSet<Vote> Votes => Set<Vote>();
     public DbSet<ModerationLog> ModerationLogs => Set<ModerationLog>();
+    public DbSet<Report> Reports => Set<Report>();
     public DbSet<UserProjection> UserProjections => Set<UserProjection>();
     public DbSet<ForumProfile> ForumProfiles => Set<ForumProfile>();
     public DbSet<ProcessedEvent> ProcessedEvents => Set<ProcessedEvent>();

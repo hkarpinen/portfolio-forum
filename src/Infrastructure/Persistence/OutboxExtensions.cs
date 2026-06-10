@@ -49,6 +49,12 @@ internal sealed class LogIdConverter : JsonConverter<LogId>
     public override void Write(Utf8JsonWriter w, LogId v, JsonSerializerOptions o) => w.WriteStringValue(v.Value);
 }
 
+internal sealed class ReportIdConverter : JsonConverter<ReportId>
+{
+    public override ReportId Read(ref Utf8JsonReader r, Type t, JsonSerializerOptions o) => new(r.GetGuid());
+    public override void Write(Utf8JsonWriter w, ReportId v, JsonSerializerOptions o) => w.WriteStringValue(v.Value);
+}
+
 internal static class OutboxExtensions
 {
     internal static readonly JsonSerializerOptions JsonOptions = new()
@@ -63,7 +69,8 @@ internal static class OutboxExtensions
             new ForumUserIdConverter(),
             new MembershipIdConverter(),
             new BanIdConverter(),
-            new LogIdConverter()
+            new LogIdConverter(),
+            new ReportIdConverter()
         }
     };
 

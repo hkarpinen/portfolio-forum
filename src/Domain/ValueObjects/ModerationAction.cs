@@ -9,5 +9,8 @@ public enum ModerationAction
     LockThread,
     PinThread,
     AppointModerator,
-    RemoveModerator
+    RemoveModerator,
+    ResolveReportApproved,
+    ResolveReportRemoved,
+    ResolveReportDismissed
 }

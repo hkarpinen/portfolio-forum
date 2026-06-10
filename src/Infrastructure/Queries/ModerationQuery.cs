@@ -1,15 +1,219 @@
 using Forum.Application.Commands;
 using Forum.Application.Dtos;
 using Forum.Application.Queries;
+using Forum.Domain.Aggregates;
+using Forum.Domain.ValueObjects;
+using Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 
 namespace Infrastructure.Queries;
 
 internal sealed class ModerationQuery : IModerationQuery
 {
-    public Task<ModerationQueueDto> QueueAsync(ModerationQueueCommand request, CancellationToken cancellationToken = default)
+    private readonly ForumDbContext _db;
+
+    public ModerationQuery(ForumDbContext db) => _db = db;
+
+    public async Task<ModerationQueueDto> QueueAsync(ModerationQueueCommand request, CancellationToken cancellationToken = default)
     {
-        // TODO: add moderation queue repository and projection.
-        var empty = new ModerationQueueDto(Array.Empty<ModerationQueueItemDto>(), 0);
-        return Task.FromResult(empty);
+        var communityId = new CommunityId(request.CommunityId);
+        return await FetchQueueAsync(communityId, request.Page, request.PageSize, cancellationToken);
     }
+
+    public async Task<ModerationQueueDto> QueueBySlugAsync(string communitySlug, int page, int pageSize, CancellationToken cancellationToken = default)
+    {
+        var community = await _db.Communities
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Slug == communitySlug, cancellationToken);
+
+        if (community is null)
+            return new ModerationQueueDto(Array.Empty<ModerationQueueItemDto>(), 0);
+
+        return await FetchQueueAsync(community.Id, page, pageSize, cancellationToken);
+    }
+
+    private async Task<ModerationQueueDto> FetchQueueAsync(
+        CommunityId communityId,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var query = _db.Reports
+            .AsNoTracking()
+            .Where(r => r.CommunityId == communityId && r.Status == ReportStatus.Open);
+
+        var total = await query.CountAsync(cancellationToken);
+        var reports = await query
+            .OrderByDescending(r => r.ReportedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        if (reports.Count == 0)
+            return new ModerationQueueDto(Array.Empty<ModerationQueueItemDto>(), total);
+
+        // Collect IDs for thread/comment lookups
+        var threadTargetIds = reports
+            .Where(r => r.TargetType == ReportTargetType.Thread)
+            .Select(r => new ThreadId(r.TargetId))
+            .ToList();
+
+        var commentTargetIds = reports
+            .Where(r => r.TargetType == ReportTargetType.Comment)
+            .Select(r => new CommentId(r.TargetId))
+            .ToList();
+
+        // Load thread data — two-pass: list then stitch
+        var threadSummaries = threadTargetIds.Count > 0
+            ? await _db.Threads
+                .AsNoTracking()
+                .Where(t => threadTargetIds.Contains(t.Id))
+                .Select(t => new ThreadSummary(t.Id.Value, t.Title, t.AuthorId.Value))
+                .ToListAsync(cancellationToken)
+            : new List<ThreadSummary>();
+
+        // Load comment data — capture ThreadId too so the queue UI can
+        // deep-link a Comment-type report back to its surrounding thread.
+        var commentSummaries = commentTargetIds.Count > 0
+            ? await _db.Comments
+                .AsNoTracking()
+                .Where(c => commentTargetIds.Contains(c.Id))
+                .Select(c => new CommentSummary(c.Id.Value, c.Content, c.AuthorId.Value, c.ThreadId.Value))
+                .ToListAsync(cancellationToken)
+            : new List<CommentSummary>();
+
+        // Collect all user IDs (reporters + target authors) for name resolution
+        var reporterIds = reports.Select(r => r.ReporterId).Distinct().ToList();
+        var targetAuthorUserIds = threadSummaries.Select(t => new UserId(t.AuthorId))
+            .Concat(commentSummaries.Select(c => new UserId(c.AuthorId)))
+            .Distinct()
+            .ToList();
+        var allUserIds = reporterIds.Concat(targetAuthorUserIds).Distinct().ToList();
+
+        var userProjections = await _db.UserProjections
+            .AsNoTracking()
+            .Where(p => allUserIds.Contains(p.Id))
+            .ToListAsync(cancellationToken);
+        var userDict = userProjections.ToDictionary(p => p.Id);
+
+        var threadDict = threadSummaries.ToDictionary(t => t.TargetId);
+        var commentDict = commentSummaries.ToDictionary(c => c.TargetId);
+
+        var items = reports.Select(r =>
+        {
+            string? targetTitle = null;
+            Guid? targetAuthorId = null;
+            string? targetAuthorName = null;
+            // For Thread-type reports, the thread is the target itself; for
+            // Comment-type, jump to the parent thread so the moderator lands
+            // in context.
+            Guid? targetThreadId = null;
+
+            if (r.TargetType == ReportTargetType.Thread && threadDict.TryGetValue(r.TargetId, out var thread))
+            {
+                targetTitle = thread.Title;
+                targetAuthorId = thread.AuthorId;
+                targetThreadId = thread.TargetId;
+                if (userDict.TryGetValue(new UserId(thread.AuthorId), out var authorProj))
+                    targetAuthorName = authorProj.EffectiveName;
+            }
+            else if (r.TargetType == ReportTargetType.Comment && commentDict.TryGetValue(r.TargetId, out var comment))
+            {
+                var snippet = comment.Content ?? string.Empty;
+                targetTitle = snippet.Length > 160 ? snippet[..160] : snippet;
+                targetAuthorId = comment.AuthorId;
+                targetThreadId = comment.ThreadId;
+                if (userDict.TryGetValue(new UserId(comment.AuthorId), out var authorProj))
+                    targetAuthorName = authorProj.EffectiveName;
+            }
+
+            string? reporterName = null;
+            if (userDict.TryGetValue(r.ReporterId, out var reporterProj))
+                reporterName = reporterProj.EffectiveName;
+
+            return new ModerationQueueItemDto(
+                r.Id.Value,
+                r.CommunityId.Value,
+                r.TargetType,
+                r.TargetId,
+                targetThreadId,
+                targetTitle,
+                targetAuthorId,
+                targetAuthorName,
+                r.ReporterId.Value,
+                reporterName,
+                r.Reason,
+                r.Details,
+                r.ReportedAt);
+        }).ToList();
+
+        return new ModerationQueueDto(items, total);
+    }
+
+    public async Task<ModerationLogListDto> ListLogAsync(string communitySlug, int page, int pageSize, CancellationToken cancellationToken = default)
+    {
+        var community = await _db.Communities
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Slug == communitySlug, cancellationToken);
+
+        if (community is null)
+            return new ModerationLogListDto(Array.Empty<ModerationLogEntryDto>(), 0);
+
+        var query = _db.ModerationLogs
+            .AsNoTracking()
+            .Where(l => l.CommunityId == community.Id);
+
+        var total = await query.CountAsync(cancellationToken);
+        var entries = await query
+            .OrderByDescending(l => l.PerformedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(l => new ModerationLogEntryDto(
+                l.Id.Value,
+                l.CommunityId.Value,
+                l.Action,
+                l.PerformedBy.Value,
+                l.TargetUserId == null ? (Guid?)null : l.TargetUserId.Value,
+                l.TargetContent,
+                l.PerformedAt))
+            .ToListAsync(cancellationToken);
+
+        return new ModerationLogListDto(entries, total);
+    }
+
+    public async Task<(Guid CommunityId, Guid ThreadId)?> GetThreadCommunityIdAsync(Guid threadId, CancellationToken cancellationToken = default)
+    {
+        var tid = new ThreadId(threadId);
+        var thread = await _db.Threads
+            .AsNoTracking()
+            .Where(t => t.Id == tid && t.DeletedAt == null)
+            .Select(t => new { CommunityId = t.CommunityId.Value, ThreadId = t.Id.Value })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return thread is null ? null : (thread.CommunityId, thread.ThreadId);
+    }
+
+    public async Task<Guid?> GetCommentCommunityIdAsync(Guid commentId, CancellationToken cancellationToken = default)
+    {
+        var cid = new CommentId(commentId);
+        var comment = await _db.Comments
+            .AsNoTracking()
+            .Where(c => c.Id == cid && c.DeletedAt == null)
+            .Select(c => new { ThreadId = c.ThreadId })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (comment is null)
+            return null;
+
+        var thread = await _db.Threads
+            .AsNoTracking()
+            .Where(t => t.Id == comment.ThreadId && t.DeletedAt == null)
+            .Select(t => new { CommunityId = t.CommunityId.Value })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return thread?.CommunityId;
+    }
+
+    private sealed record ThreadSummary(Guid TargetId, string Title, Guid AuthorId);
+    private sealed record CommentSummary(Guid TargetId, string? Content, Guid AuthorId, Guid ThreadId);
 }

@@ -22,8 +22,23 @@ public sealed record ModerationLogEntryDto(
 public sealed record ModerationQueueItemDto(
     Guid QueueItemId,
     Guid CommunityId,
-    string QueueType,
-    string Description,
-    DateTime QueuedAt);
+    ReportTargetType TargetType,
+    Guid TargetId,
+    /// <summary>
+    /// The thread to deep-link from the mod queue. For Thread-type reports
+    /// this equals <see cref="TargetId"/>; for Comment-type reports it's
+    /// the parent thread so the moderator can jump into context.
+    /// </summary>
+    Guid? TargetThreadId,
+    string? TargetTitle,
+    Guid? TargetAuthorId,
+    string? TargetAuthorName,
+    Guid ReporterId,
+    string? ReporterName,
+    string Reason,
+    string? Details,
+    DateTime ReportedAt);
 
 public sealed record ModerationQueueDto(IReadOnlyCollection<ModerationQueueItemDto> Items, int TotalCount);
+
+public sealed record ModerationLogListDto(IReadOnlyCollection<ModerationLogEntryDto> Items, int TotalCount);

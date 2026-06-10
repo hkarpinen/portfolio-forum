@@ -65,6 +65,7 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<ICommentRepository, CommentRepository>();
         services.AddScoped<IVoteRepository, VoteRepository>();
         services.AddScoped<IModerationLogRepository, ModerationLogRepository>();
+        services.AddScoped<IReportRepository, ReportRepository>();
         services.AddScoped<IForumProfileRepository, ForumProfileRepository>();
 
         services.AddScoped<ICommunityQuery, CommunityQuery>();
