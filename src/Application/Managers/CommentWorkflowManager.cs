@@ -1,4 +1,6 @@
 using Forum.Application.Commands;
+using Forum.Application.Dtos;
+using Forum.Application.Mappers;
 using Forum.Domain.Aggregates;
 using Forum.Domain.Engines;
 using Forum.Application.Repositories;
@@ -38,10 +40,10 @@ internal sealed class CommentWorkflowManager : ICommentWorkflowManager
         return comment.Id.Value;
     }
 
-    public async Task<bool> EditAsync(EditCommentCommand command, CancellationToken cancellationToken = default)
+    public async Task<CommentDto?> EditAsync(EditCommentCommand command, CancellationToken cancellationToken = default)
     {
         var comment = await _commentRepository.GetByIdAsync(new CommentId(command.CommentId), cancellationToken);
-        if (comment is null) return false;
+        if (comment is null) return null;
 
         if (SpamDetectionEngine.IsSpam(command.Content, comment.AuthorId.Value))
             throw new InvalidOperationException("Content was rejected as spam.");
@@ -49,7 +51,10 @@ internal sealed class CommentWorkflowManager : ICommentWorkflowManager
         comment.Edit(command.Content, DateTime.UtcNow);
         await _commentRepository.UpdateAsync(comment, cancellationToken);
         await _commentRepository.CommitAsync(cancellationToken);
-        return true;
+
+        // Frontend expects the updated comment (including new EditedAt) so it can patch its cache.
+        // Vote score isn't recomputed here; the caller still has the current value client-side.
+        return CommentMapper.ToDto(comment, authorName: null, authorAvatarUrl: null, voteScore: 0);
     }
 
     public async Task<bool> DeleteAsync(DeleteCommentCommand command, CancellationToken cancellationToken = default)

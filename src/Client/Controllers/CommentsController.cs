@@ -42,8 +42,8 @@ public sealed class CommentsController : ControllerBase
     public async Task<IActionResult> Edit([FromRoute] Guid commentId, [FromBody] EditCommentCommand request,
         CancellationToken cancellationToken)
     {
-        var found = await _commentWorkflowManager.EditAsync(request with { CommentId = commentId }, cancellationToken);
-        return found ? Ok() : NotFound();
+        var result = await _commentWorkflowManager.EditAsync(request with { CommentId = commentId }, cancellationToken);
+        return result is null ? NotFound() : Ok(result);
     }
 
     [HttpDelete("{commentId:guid}")]
