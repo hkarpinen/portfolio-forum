@@ -21,6 +21,19 @@ public static class ClaimsPrincipalExtensions
         return userId;
     }
 
+    /// <summary>
+    /// Returns the authenticated user's id, or null if the principal is
+    /// anonymous (no sub claim). Use on endpoints that are open to
+    /// anonymous callers but optionally specialise for the signed-in user.
+    /// </summary>
+    public static Guid? GetUserIdOrNull(this ClaimsPrincipal principal)
+    {
+        var raw = principal.FindFirstValue("sub")
+                  ?? principal.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(raw)) return null;
+        return Guid.TryParse(raw, out var userId) ? userId : null;
+    }
+
     public static string GetRequiredRole(this ClaimsPrincipal principal) =>
         GetRole(principal) ?? throw new InvalidOperationException("Missing role claim.");
 

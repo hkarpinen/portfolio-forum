@@ -49,18 +49,18 @@ public sealed class MediaController : ControllerBase
     public async Task<IActionResult> UploadImage(IFormFile file, CancellationToken cancellationToken)
     {
         if (file is null || file.Length == 0)
-            return BadRequest(new { error = "No file provided." });
+            return Problem(detail: "No file provided.", statusCode: StatusCodes.Status400BadRequest);
 
         if (file.Length > MaxBytes)
-            return BadRequest(new { error = "File exceeds the 5 MB limit." });
+            return Problem(detail: "File exceeds the 5 MB limit.", statusCode: StatusCodes.Status400BadRequest);
 
         if (!AllowedTypes.Contains(file.ContentType))
-            return BadRequest(new { error = "Unsupported image type. Use JPEG, PNG, WebP, or GIF." });
+            return Problem(detail: "Unsupported image type. Use JPEG, PNG, WebP, or GIF.", statusCode: StatusCodes.Status400BadRequest);
 
         await using var stream = file.OpenReadStream();
 
         if (!HasValidMagicBytes(stream, file.ContentType))
-            return BadRequest(new { error = "File content does not match the declared type." });
+            return Problem(detail: "File content does not match the declared type.", statusCode: StatusCodes.Status400BadRequest);
 
         var url = await _mediaStore.UploadAsync(stream, file.FileName, file.ContentType, cancellationToken);
 
