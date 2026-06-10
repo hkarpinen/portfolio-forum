@@ -18,7 +18,11 @@ internal sealed class ThreadQuery : IThreadQuery
     public async Task<ThreadListDto> ListAsync(ListThreadsCommand request, CancellationToken cancellationToken = default)
     {
         var communityId = new CommunityId(request.CommunityId);
-        var query = _db.Threads.AsNoTracking().Where(t => t.CommunityId == communityId && t.DeletedAt == null);
+        // `Status == Published` excludes drafts from public community listings.
+        var query = _db.Threads.AsNoTracking().Where(t =>
+            t.CommunityId == communityId
+            && t.DeletedAt == null
+            && t.Status == ThreadStatus.Published);
         var total = await query.CountAsync(cancellationToken);
         var items = await query
             .OrderByDescending(t => t.CreatedAt)
@@ -39,7 +43,7 @@ internal sealed class ThreadQuery : IThreadQuery
             var hotScore = HotRankingEngine.CalculateHotScore(t.CreatedAt, t.VoteScore, 0);
             return new ThreadSummaryDto(
                 t.Id.Value, t.CommunityId.Value, t.AuthorId.Value,
-                proj?.EffectiveName, proj?.AvatarUrl, t.Title, t.Flair,
+                proj?.EffectiveName, proj?.AvatarUrl, t.Title, t.Tags,
                 t.CreatedAt, hotScore, t.VoteScore);
         }).ToList();
 
@@ -48,21 +52,27 @@ internal sealed class ThreadQuery : IThreadQuery
 
     public async Task<ThreadDto?> GetDetailAsync(ThreadDetailCommand request, CancellationToken cancellationToken = default)
     {
-        var thread = await _db.Threads.AsNoTracking().FirstOrDefaultAsync(t => t.Id == new ThreadId(request.ThreadId), cancellationToken);
+        // Public detail read — drafts are scoped to the author and don't
+        // surface here. Author-only draft reads go through `GetDraftByIdAsync`.
+        var thread = await _db.Threads.AsNoTracking().FirstOrDefaultAsync(
+            t => t.Id == new ThreadId(request.ThreadId) && t.Status == ThreadStatus.Published,
+            cancellationToken);
         if (thread is null) return null;
 
         var proj = await _db.UserProjections.AsNoTracking().FirstOrDefaultAsync(p => p.Id == thread.AuthorId, cancellationToken);
         var hotScore = HotRankingEngine.CalculateHotScore(thread.CreatedAt, thread.VoteScore, 0);
         return new ThreadDto(
             thread.Id.Value, thread.CommunityId.Value, thread.AuthorId.Value,
-            proj?.EffectiveName, proj?.AvatarUrl, thread.Title, thread.Content, thread.Flair,
+            proj?.EffectiveName, proj?.AvatarUrl, thread.Title, thread.Content, thread.Tags,
             thread.CreatedAt, thread.EditedAt, thread.IsLocked, thread.IsPinned,
             thread.DeletedAt, hotScore, thread.VoteScore);
     }
 
     public async Task<FeedListDto> ListFeedAsync(FeedCommand request, CancellationToken cancellationToken = default)
     {
-        var baseQuery = _db.Threads.AsNoTracking().Where(t => t.DeletedAt == null);
+        // Feed is the home page — drafts never appear here.
+        var baseQuery = _db.Threads.AsNoTracking()
+            .Where(t => t.DeletedAt == null && t.Status == ThreadStatus.Published);
         var total = await baseQuery.CountAsync(cancellationToken);
 
         var candidates = await baseQuery
@@ -124,7 +134,7 @@ internal sealed class ThreadQuery : IThreadQuery
                 t.Id.Value, t.CommunityId.Value,
                 community?.Slug, community?.Name,
                 t.AuthorId.Value,
-                proj?.EffectiveName, proj?.AvatarUrl, t.Title, t.Flair,
+                proj?.EffectiveName, proj?.AvatarUrl, t.Title, t.Tags,
                 t.CreatedAt, hotScore, t.VoteScore, commentCount, t.IsPinned);
         }).ToList();
 
@@ -134,7 +144,12 @@ internal sealed class ThreadQuery : IThreadQuery
     public async Task<ThreadListDto> ListByAuthorAsync(Guid authorId, int page, int pageSize, CancellationToken cancellationToken = default)
     {
         var authorUserId = new UserId(authorId);
-        var query = _db.Threads.AsNoTracking().Where(t => t.AuthorId == authorUserId && t.DeletedAt == null);
+        // Public profile listing — anyone can view, so drafts are hidden.
+        // The author's own draft list is served by `ListDraftsByAuthorAsync`.
+        var query = _db.Threads.AsNoTracking().Where(t =>
+            t.AuthorId == authorUserId
+            && t.DeletedAt == null
+            && t.Status == ThreadStatus.Published);
 
         var total = await query.CountAsync(cancellationToken);
         var items = await query
@@ -150,7 +165,7 @@ internal sealed class ThreadQuery : IThreadQuery
             var hotScore = HotRankingEngine.CalculateHotScore(t.CreatedAt, t.VoteScore, 0);
             return new ThreadSummaryDto(
                 t.Id.Value, t.CommunityId.Value, t.AuthorId.Value,
-                proj?.EffectiveName, proj?.AvatarUrl, t.Title, t.Flair,
+                proj?.EffectiveName, proj?.AvatarUrl, t.Title, t.Tags,
                 t.CreatedAt, hotScore, t.VoteScore);
         }).ToList();
         return new ThreadListDto(responses, total);
@@ -159,9 +174,9 @@ internal sealed class ThreadQuery : IThreadQuery
     public async Task<SearchDto> SearchAsync(SearchQueryCommand request, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(request.Query))
-            return new SearchDto(Array.Empty<SearchResultItem>(), 0);
+            return new SearchDto(Array.Empty<SearchResultDto>(), 0);
 
-        var results = new List<SearchResultItem>();
+        var results = new List<SearchResultDto>();
 
         if (request.Scope is SearchScope.All or SearchScope.Communities)
         {
@@ -171,31 +186,35 @@ internal sealed class ThreadQuery : IThreadQuery
                 .Take(10)
                 .ToListAsync(cancellationToken);
 
-            results.AddRange(communities.Select(c => new SearchResultItem(
-                "community", c.Id.Value, c.Name, c.Description, c.Id.Value, c.Slug, c.Name, c.Slug, c.CreatedAt, 0)));
+            results.AddRange(communities.Select(c => (SearchResultDto)new CommunitySearchResultDto(
+                ItemId: c.Id.Value,
+                Name: c.Name,
+                Description: c.Description,
+                Slug: c.Slug,
+                CreatedAt: c.CreatedAt,
+                RankScore: 0)));
         }
 
         if (request.Scope is SearchScope.All or SearchScope.Threads)
         {
             var threads = await _db.Threads
-                .Where(t => t.DeletedAt == null &&
-                    (EF.Functions.ILike(t.Title, $"%{request.Query}%") ||
-                     (t.Content != null && EF.Functions.ILike(t.Content, $"%{request.Query}%"))))
+                .Where(t => t.DeletedAt == null
+                    && t.Status == ThreadStatus.Published
+                    && (EF.Functions.ILike(t.Title, $"%{request.Query}%") ||
+                        (t.Content != null && EF.Functions.ILike(t.Content, $"%{request.Query}%"))))
                 .OrderByDescending(t => t.CreatedAt)
                 .Take(20)
                 .ToListAsync(cancellationToken);
 
-            results.AddRange(threads.Select(t => new SearchResultItem(
-                "thread",
-                t.Id.Value,
-                t.Title,
-                t.Content != null && t.Content.Length > 120 ? t.Content[..120] + "\u2026" : t.Content,
-                t.CommunityId.Value,
-                null,
-                null,
-                null,
-                t.CreatedAt,
-                HotRankingEngine.CalculateHotScore(t.CreatedAt, 0, 0))));
+            results.AddRange(threads.Select(t => (SearchResultDto)new ThreadSearchResultDto(
+                ItemId: t.Id.Value,
+                Title: t.Title,
+                Snippet: t.Content != null && t.Content.Length > 120 ? t.Content[..120] + "\u2026" : t.Content,
+                CommunityId: t.CommunityId.Value,
+                CommunitySlug: null,
+                CommunityName: null,
+                CreatedAt: t.CreatedAt,
+                RankScore: HotRankingEngine.CalculateHotScore(t.CreatedAt, 0, 0))));
 
             // Backfill community slugs
             var communityIds = threads.Select(t => t.CommunityId).Distinct().ToList();
@@ -204,13 +223,15 @@ internal sealed class ThreadQuery : IThreadQuery
                 .ToDictionaryAsync(c => c.Id, c => new { c.Slug, c.Name }, cancellationToken);
 
             results = results
-                .Select(r => r.ItemType == "thread" && communityMap.ContainsKey(new CommunityId(r.CommunityId))
-                    ? r with
+                .Select<SearchResultDto, SearchResultDto>(r =>
+                {
+                    if (r is ThreadSearchResultDto thread
+                        && communityMap.TryGetValue(new CommunityId(thread.CommunityId), out var community))
                     {
-                        CommunitySlug = communityMap[new CommunityId(r.CommunityId)].Slug,
-                        CommunityName = communityMap[new CommunityId(r.CommunityId)].Name
+                        return thread with { CommunitySlug = community.Slug, CommunityName = community.Name };
                     }
-                    : r)
+                    return r;
+                })
                 .ToList();
         }
 
@@ -224,5 +245,62 @@ internal sealed class ThreadQuery : IThreadQuery
             .ToList();
 
         return new SearchDto(page, ordered.Count);
+    }
+
+    // ── Author-scoped draft reads ────────────────────────────────────────────
+    // Drafts are private to their author. Every method here filters on
+    // `AuthorId == authorId AND Status == Draft AND DeletedAt == null` so
+    // there's no path that surfaces another user's drafts.
+
+    public async Task<IReadOnlyList<ThreadSummaryDto>> ListDraftsByAuthorAsync(Guid authorId, CancellationToken cancellationToken = default)
+    {
+        var authorUserId = new UserId(authorId);
+        var drafts = await _db.Threads.AsNoTracking()
+            .Where(t => t.AuthorId == authorUserId
+                && t.Status == ThreadStatus.Draft
+                && t.DeletedAt == null)
+            .OrderByDescending(t => t.SavedAt)
+            .ToListAsync(cancellationToken);
+
+        var proj = await _db.UserProjections.AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == authorUserId, cancellationToken);
+
+        return drafts.Select(t => new ThreadSummaryDto(
+            t.Id.Value, t.CommunityId.Value, t.AuthorId.Value,
+            proj?.EffectiveName, proj?.AvatarUrl, t.Title, t.Tags,
+            // Drafts haven't been published, so HotScore is meaningless —
+            // surface 0 rather than a stale hot-rank against the SavedAt.
+            t.CreatedAt, 0d, t.VoteScore)).ToList();
+    }
+
+    public async Task<ThreadDto?> GetDraftByIdAsync(Guid authorId, Guid threadId, CancellationToken cancellationToken = default)
+    {
+        var authorUserId = new UserId(authorId);
+        var draft = await _db.Threads.AsNoTracking().FirstOrDefaultAsync(t =>
+            t.Id == new ThreadId(threadId)
+            && t.AuthorId == authorUserId
+            && t.Status == ThreadStatus.Draft
+            && t.DeletedAt == null,
+            cancellationToken);
+        if (draft is null) return null;
+
+        var proj = await _db.UserProjections.AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == authorUserId, cancellationToken);
+
+        return new ThreadDto(
+            draft.Id.Value, draft.CommunityId.Value, draft.AuthorId.Value,
+            proj?.EffectiveName, proj?.AvatarUrl, draft.Title, draft.Content, draft.Tags,
+            draft.CreatedAt, draft.EditedAt, draft.IsLocked, draft.IsPinned,
+            draft.DeletedAt, 0d, draft.VoteScore);
+    }
+
+    public async Task<int> CountDraftsByAuthorAsync(Guid authorId, CancellationToken cancellationToken = default)
+    {
+        var authorUserId = new UserId(authorId);
+        return await _db.Threads.AsNoTracking()
+            .CountAsync(t => t.AuthorId == authorUserId
+                && t.Status == ThreadStatus.Draft
+                && t.DeletedAt == null,
+                cancellationToken);
     }
 }

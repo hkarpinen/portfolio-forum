@@ -37,7 +37,7 @@ public sealed class ThreadsController : ControllerBase
         var community = await _communityQuery.GetBySlugAsync(
             new CommunityBySlugCommand(request.CommunitySlug), cancellationToken);
         if (community is null)
-            return NotFound(new { error = "Community not found." });
+            return Problem(detail: "Community not found.", statusCode: StatusCodes.Status404NotFound);
 
         var created = await _threadWorkflowManager.CreateAsync(
             request with { CommunityId = community.CommunityId, AuthorId = User.GetRequiredUserId() },
@@ -52,7 +52,7 @@ public sealed class ThreadsController : ControllerBase
         [FromQuery] int pageSize = 20, CancellationToken cancellationToken = default)
     {
         if (communityId == Guid.Empty)
-            return BadRequest(new { error = "Query parameter 'communityId' is required." });
+            return Problem(detail: "Query parameter 'communityId' is required.", statusCode: StatusCodes.Status400BadRequest);
 
         var result = await _threadQuery.ListAsync(new ListThreadsCommand(communityId, page, pageSize), cancellationToken);
         return Ok(result);

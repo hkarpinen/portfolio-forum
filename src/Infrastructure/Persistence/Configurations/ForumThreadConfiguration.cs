@@ -54,9 +54,26 @@ internal sealed class ForumThreadConfiguration : IEntityTypeConfiguration<ForumT
             .HasDefaultValue(0)
             .IsRequired();
 
-        builder.Property(x => x.Flair)
-            .HasMaxLength(50)
-            .IsRequired(false);
+        // Status discriminates draft-vs-published. Default Published so
+        // existing rows (created before this column existed) read as
+        // published — the only path that produces drafts is BeginDraft,
+        // which sets the column explicitly.
+        builder.Property(x => x.Status)
+            .HasConversion<int>()
+            .HasDefaultValue(ThreadStatus.Published)
+            .IsRequired();
+
+        builder.Property(x => x.SavedAt)
+            .HasColumnType("timestamptz");
+
+        // Tags column replaces the former single-value Flair. Stored as a text[] (postgres array).
+        // EF Core maps `IReadOnlyList<string>` over a private `_tags` backing field.
+        builder.Property<List<string>>("_tags")
+            .HasColumnName("tags")
+            .HasColumnType("text[]")
+            .IsRequired();
+
+        builder.Ignore(t => t.Tags);
 
         builder.Property<NpgsqlTsVector>("search_vector")
             .HasColumnType("tsvector")
@@ -65,9 +82,13 @@ internal sealed class ForumThreadConfiguration : IEntityTypeConfiguration<ForumT
         builder.HasIndex("search_vector")
             .HasMethod("GIN");
 
+        // Public-feed read index — filter `deleted_at IS NULL AND status = 1`
+        // (Published) so the index serves only the public surface.
         builder.HasIndex(x => new { x.CommunityId, x.CreatedAt })
-            .HasFilter("deleted_at IS NULL");
-        builder.HasIndex(x => x.AuthorId);
+            .HasFilter("deleted_at IS NULL AND status = 1");
+
+        // Author-scoped drafts index — supports the /api/forum/drafts list.
+        builder.HasIndex(x => new { x.AuthorId, x.Status });
 
         builder.Ignore(x => x.DomainEvents);
     }
