@@ -28,7 +28,8 @@ internal sealed class CommunityWorkflowManager : ICommunityWorkflowManager
             command.Visibility,
             new UserId(command.OwnerId),
             command.Description,
-            command.ImageUrl);
+            command.ImageUrl,
+            command.Rules);
 
         await _communityRepository.AddAsync(community, cancellationToken);
 
@@ -65,7 +66,7 @@ internal sealed class CommunityWorkflowManager : ICommunityWorkflowManager
             slug = await ResolveUniqueSlugAsync(command.Name, existingCommunityId: community.Id, cancellationToken);
         }
 
-        community.Update(command.Name, slug, command.Visibility, DateTime.UtcNow, command.Description, command.ImageUrl);
+        community.Update(command.Name, slug, command.Visibility, DateTime.UtcNow, command.Description, command.ImageUrl, command.Rules);
         await _communityRepository.UpdateAsync(community, cancellationToken);
         await _communityRepository.CommitAsync(cancellationToken);
         return CommunityMapper.ToDto(community);

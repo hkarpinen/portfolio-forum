@@ -20,6 +20,9 @@ public sealed class Community : IAggregateRoot
     public DateTime CreatedAt { get; private set; }
     public DateTime? UpdatedAt { get; private set; }
 
+    /// <summary>Markdown-formatted community rules. ≤ 10000 chars.</summary>
+    public string? Rules { get; private set; }
+
     private Community() { }
 
     public static Community Create(
@@ -28,12 +31,15 @@ public sealed class Community : IAggregateRoot
         CommunityVisibility visibility,
         UserId ownerId,
         string? description = null,
-        string? imageUrl = null)
+        string? imageUrl = null,
+        string? rules = null)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Name cannot be empty.", nameof(name));
         if (string.IsNullOrWhiteSpace(slug))
             throw new ArgumentException("Slug cannot be empty.", nameof(slug));
+        if (rules?.Length > 10000)
+            throw new ArgumentException("Rules must be ≤ 10000 characters.", nameof(rules));
 
         var community = new Community
         {
@@ -42,6 +48,7 @@ public sealed class Community : IAggregateRoot
             Name = name,
             Description = description,
             ImageUrl = imageUrl,
+            Rules = rules,
             Visibility = visibility,
             OwnerId = ownerId,
             CreatedAt = DateTime.UtcNow
@@ -56,17 +63,21 @@ public sealed class Community : IAggregateRoot
         CommunityVisibility visibility,
         DateTime updatedAt,
         string? description = null,
-        string? imageUrl = null)
+        string? imageUrl = null,
+        string? rules = null)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Name cannot be empty.", nameof(name));
         if (string.IsNullOrWhiteSpace(slug))
             throw new ArgumentException("Slug cannot be empty.", nameof(slug));
+        if (rules?.Length > 10000)
+            throw new ArgumentException("Rules must be ≤ 10000 characters.", nameof(rules));
 
         Name = name;
         Slug = slug;
         Description = description;
         ImageUrl = imageUrl;
+        Rules = rules;
         Visibility = visibility;
         UpdatedAt = updatedAt;
         _domainEvents.Add(new CommunityUpdated(Id, name, visibility, updatedAt));

@@ -1,4 +1,5 @@
 using Forum.Application.Commands;
+using Forum.Application.Dtos;
 using Forum.Application.Managers;
 using Forum.Application.Queries;
 using Client.Authorization;
@@ -46,10 +47,27 @@ public sealed class CommunitiesController : ControllerBase
 
     [HttpGet]
     [AllowAnonymous]
-    public async Task<IActionResult> List([FromQuery] int page = 1, [FromQuery] int pageSize = 20,
+    public async Task<IActionResult> List(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] string? membership = null,
         CancellationToken cancellationToken = default)
     {
-        var result = await _communityQuery.ListAsync(new ListCommunitiesCommand(page, pageSize), cancellationToken);
+        // `?membership=mine` filters to the caller's joined communities so the
+        // "Your communities" sidebar fits in one round-trip. Anonymous users
+        // with that filter get an empty list rather than 401 — the page is
+        // still public-readable and a friendly empty state is fine.
+        Guid? membershipUserId = null;
+        if (string.Equals(membership, "mine", StringComparison.OrdinalIgnoreCase))
+        {
+            membershipUserId = User.GetUserIdOrNull();
+            if (membershipUserId is null)
+                return Ok(new CommunityListDto(Array.Empty<CommunityDto>(), 0));
+        }
+
+        var result = await _communityQuery.ListAsync(
+            new ListCommunitiesCommand(page, pageSize, membershipUserId),
+            cancellationToken);
         return Ok(result);
     }
 

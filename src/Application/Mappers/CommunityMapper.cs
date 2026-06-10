@@ -20,6 +20,7 @@ public static class CommunityMapper
         c.OwnerId.Value,
         c.CreatedAt,
         c.UpdatedAt,
+        c.Rules,
         activity,
         memberCount,
         threadCount,

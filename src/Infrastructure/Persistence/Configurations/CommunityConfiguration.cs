@@ -31,6 +31,9 @@ internal sealed class CommunityConfiguration : IEntityTypeConfiguration<Communit
         builder.Property(x => x.ImageUrl)
             .HasMaxLength(2048);
 
+        builder.Property(x => x.Rules)
+            .HasMaxLength(10000);
+
         builder.Property(x => x.Visibility)
             .HasConversion<string>()
             .HasMaxLength(20)

@@ -23,6 +23,7 @@ public sealed record CommunityDto(
     Guid OwnerId,
     DateTime CreatedAt,
     DateTime? UpdatedAt,
+    string? Rules = null,
     CommunityActivitySnapshot? LatestActivity = null,
     int MemberCount = 0,
     int ThreadCount = 0,

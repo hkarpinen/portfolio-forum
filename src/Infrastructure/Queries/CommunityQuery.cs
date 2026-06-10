@@ -19,9 +19,19 @@ internal sealed class CommunityQuery : ICommunityQuery
 
     public async Task<CommunityListDto> ListAsync(ListCommunitiesCommand request, CancellationToken cancellationToken = default)
     {
-        var total = await _db.Communities.CountAsync(cancellationToken);
-        var communities = await _db.Communities
-            .AsNoTracking()
+        // Filter to communities the caller is a member of when MembershipUserId
+        // is set. The "Your communities" sidebar on /forum uses this so it
+        // doesn't have to fetch all communities and intersect client-side.
+        IQueryable<Forum.Domain.Aggregates.Community> baseQuery = _db.Communities.AsNoTracking();
+        if (request.MembershipUserId is { } userId)
+        {
+            var userIdVo = new UserId(userId);
+            baseQuery = baseQuery.Where(c => _db.Memberships.Any(m =>
+                m.CommunityId == c.Id && m.UserId == userIdVo));
+        }
+
+        var total = await baseQuery.CountAsync(cancellationToken);
+        var communities = await baseQuery
             .OrderBy(c => c.Name)
             .Skip((request.Page - 1) * request.PageSize)
             .Take(request.PageSize)
