@@ -47,7 +47,8 @@ namespace Infrastructure.Persistence.Migrations
                 schema: "forum",
                 table: "threads",
                 type: "text[]",
-                nullable: false);
+                nullable: false,
+                defaultValueSql: "'{}'");
 
             migrationBuilder.AddColumn<string>(
                 name: "rules",
