@@ -4,7 +4,9 @@ namespace Client.Extensions;
 
 public static class ClaimsPrincipalExtensions
 {
-    private static readonly string[] MemberRoles = { "Member", "Moderator", "Owner", "Admin" };
+    // "Demo" must be listed: it is a real signed-in role, and omitting it 403s every
+    // write for demo sessions. Admin is deliberately not a member role.
+    private static readonly string[] MemberRoles = { "Member", "Moderator", "Owner", "Admin", "Demo" };
     private static readonly string[] AdminRoles  = { "Admin" };
 
     public static Guid GetRequiredUserId(this ClaimsPrincipal principal)
@@ -21,11 +23,8 @@ public static class ClaimsPrincipalExtensions
         return userId;
     }
 
-    /// <summary>
-    /// Returns the authenticated user's id, or null if the principal is
-    /// anonymous (no sub claim). Use on endpoints that are open to
-    /// anonymous callers but optionally specialise for the signed-in user.
-    /// </summary>
+    /// <summary>Null when anonymous — for endpoints open to everyone that specialise
+    /// when signed in.</summary>
     public static Guid? GetUserIdOrNull(this ClaimsPrincipal principal)
     {
         var raw = principal.FindFirstValue("sub")

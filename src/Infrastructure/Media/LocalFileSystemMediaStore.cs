@@ -12,9 +12,8 @@ internal sealed class LocalFileSystemMediaStore : IMediaStore
         _basePath = configuration["Media:RootPath"]
             ?? Path.Combine(AppContext.BaseDirectory, "uploads", "forum");
 
-        // Absolute public URL prefix for stored files. Must be set per-environment so that
-        // persisted URLs are environment-independent and survive migration to object storage
-        // with no data changes.
+        // Set per environment: stored URLs are absolute, so this is what lets them survive
+        // a move to object storage without rewriting rows.
         _publicBaseUrl = (configuration["Media:PublicBaseUrl"] ?? "/uploads/forum").TrimEnd('/');
 
         Directory.CreateDirectory(_basePath);
@@ -50,7 +49,7 @@ internal sealed class LocalFileSystemMediaStore : IMediaStore
         await using var fileStream = new FileStream(fullPath, FileMode.CreateNew, FileAccess.Write, FileShare.None);
         await content.CopyToAsync(fileStream, cancellationToken);
 
-        _ = contentType; // reserved for future content-type validation
+        _ = contentType; // nothing validates content-type yet
         return $"{_publicBaseUrl}/{storedName}";
     }
 }

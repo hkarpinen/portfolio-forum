@@ -19,14 +19,11 @@ public class ForumThreadTests
     [Fact]
     public void Create_ShouldSetProperties()
     {
-        // Arrange
         var communityId = new CommunityId(Guid.NewGuid());
         var authorId = new UserId(Guid.NewGuid());
 
-        // Act
         var thread = ForumThread.Create(communityId, "test-community", authorId, "Title", "Content");
 
-        // Assert
         Assert.Equal(communityId, thread.CommunityId);
         Assert.Equal(authorId, thread.AuthorId);
         Assert.Equal("Title", thread.Title);
@@ -46,10 +43,8 @@ public class ForumThreadTests
     [Fact]
     public void Create_ShouldRaise_ThreadCreatedEvent()
     {
-        // Arrange / Act
         var thread = CreateThread();
 
-        // Assert
         Assert.Single(thread.DomainEvents);
         Assert.IsType<ThreadCreated>(thread.DomainEvents.First());
     }
@@ -57,13 +52,10 @@ public class ForumThreadTests
     [Fact]
     public void Edit_ShouldUpdateTitleAndContent()
     {
-        // Arrange
         var thread = CreateThread();
 
-        // Act
         thread.Edit("New Title", "New Content", null, DateTime.UtcNow);
 
-        // Assert
         Assert.Equal("New Title", thread.Title);
         Assert.Equal("New Content", thread.Content);
         Assert.NotNull(thread.EditedAt);
@@ -72,53 +64,41 @@ public class ForumThreadTests
     [Fact]
     public void Edit_ShouldRaise_ThreadEditedEvent()
     {
-        // Arrange
         var thread = CreateThread();
 
-        // Act
         thread.Edit("New Title", "Content", null, DateTime.UtcNow);
 
-        // Assert
         Assert.Contains(thread.DomainEvents, e => e is ThreadEdited);
     }
 
     [Fact]
     public void Lock_ShouldSetIsLocked()
     {
-        // Arrange
         var thread = CreateThread();
 
-        // Act
         thread.Lock(DateTime.UtcNow);
 
-        // Assert
         Assert.True(thread.IsLocked);
     }
 
     [Fact]
     public void Lock_ShouldRaise_ThreadLockedEvent()
     {
-        // Arrange
         var thread = CreateThread();
 
-        // Act
         thread.Lock(DateTime.UtcNow);
 
-        // Assert
         Assert.Contains(thread.DomainEvents, e => e is ThreadLocked);
     }
 
     [Fact]
     public void Delete_ShouldSetDeletedAt()
     {
-        // Arrange
         var thread = CreateThread();
         var deletedAt = DateTime.UtcNow;
 
-        // Act
         thread.Delete(deletedAt);
 
-        // Assert
         Assert.Equal(deletedAt, thread.DeletedAt);
     }
 

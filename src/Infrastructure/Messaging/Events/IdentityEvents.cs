@@ -1,6 +1,5 @@
-// Wire contracts for identity events consumed from RabbitMQ.
-// Namespace and type names MUST match the domain events published by the identity service
-// so MassTransit routes to the same exchange (e.g. Domain.Events:UserRegistered).
+// Namespace and type names MUST match the publisher's, or these bind a different
+// exchange and every message is missed silently.
 namespace Domain.Events;
 
 public sealed record UserRegistered(

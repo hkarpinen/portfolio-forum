@@ -18,11 +18,41 @@ public sealed class ModerationController : ControllerBase
 {
     private readonly IModerationManager _moderationManager;
     private readonly IModerationQuery _moderationQuery;
+    private readonly ICommunityQuery _communityQuery;
+    private readonly IMembershipQuery _membershipQuery;
 
-    public ModerationController(IModerationManager moderationManager, IModerationQuery moderationQuery)
+    public ModerationController(
+        IModerationManager moderationManager,
+        IModerationQuery moderationQuery,
+        ICommunityQuery communityQuery,
+        IMembershipQuery membershipQuery)
     {
         _moderationManager = moderationManager;
         _moderationQuery = moderationQuery;
+        _communityQuery = communityQuery;
+        _membershipQuery = membershipQuery;
+    }
+
+    /// <summary>
+    /// True when the caller moderates THIS community.
+    ///
+    /// The class-level policy only establishes "a forum user in good standing", which is every
+    /// signed-in account — not nearly enough for a community's moderation surface. Without this
+    /// check anyone could read any community's report queue and moderation history, including who
+    /// removed what and which members were targeted.
+    /// </summary>
+    private async Task<bool> ModeratesAsync(string slug, CancellationToken cancellationToken)
+    {
+        if (User.IsAdmin()) return true;
+
+        var community = await _communityQuery.GetBySlugAsync(new CommunityBySlugCommand(slug), cancellationToken);
+        if (community is null) return false;
+
+        var (_, role) = await _membershipQuery.GetMembershipAsync(
+            community.CommunityId, User.GetRequiredUserId(), cancellationToken);
+
+        return string.Equals(role, "Owner", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(role, "Moderator", StringComparison.OrdinalIgnoreCase);
     }
 
     [HttpPost("bans")]
@@ -73,7 +103,6 @@ public sealed class ModerationController : ControllerBase
         return Ok(result);
     }
 
-    /// <summary>Per-community mod-queue endpoint matching the frontend's URL shape.</summary>
     [HttpGet("/api/forum/communities/{slug}/mod-queue")]
     public async Task<IActionResult> QueueBySlug(
         [FromRoute] string slug,
@@ -81,11 +110,14 @@ public sealed class ModerationController : ControllerBase
         [FromQuery] int pageSize = 20,
         CancellationToken cancellationToken = default)
     {
+        // NotFound rather than Forbid: a stranger should not be able to tell a community's queue
+        // apart from one that does not exist.
+        if (!await ModeratesAsync(slug, cancellationToken)) return NotFound();
+
         var result = await _moderationQuery.QueueBySlugAsync(slug, page, pageSize, cancellationToken);
         return Ok(result);
     }
 
-    /// <summary>Returns reverse-chronological mod-log entries for the named community.</summary>
     [HttpGet("/api/forum/communities/{slug}/mod-log")]
     public async Task<IActionResult> ModLog(
         [FromRoute] string slug,
@@ -93,11 +125,12 @@ public sealed class ModerationController : ControllerBase
         [FromQuery] int pageSize = 50,
         CancellationToken cancellationToken = default)
     {
+        if (!await ModeratesAsync(slug, cancellationToken)) return NotFound();
+
         var result = await _moderationQuery.ListLogAsync(slug, page, pageSize, cancellationToken);
         return Ok(result);
     }
 
-    /// <summary>Report a thread for moderator review.</summary>
     [HttpPost("/api/forum/threads/{threadId:guid}/report")]
     [EnableRateLimiting("write")]
     public async Task<IActionResult> ReportThread(
@@ -122,7 +155,6 @@ public sealed class ModerationController : ControllerBase
         return StatusCode(StatusCodes.Status201Created, new { reportId });
     }
 
-    /// <summary>Report a comment for moderator review.</summary>
     [HttpPost("/api/forum/comments/{commentId:guid}/report")]
     [EnableRateLimiting("write")]
     public async Task<IActionResult> ReportComment(
@@ -168,7 +200,6 @@ public sealed class ModerationController : ControllerBase
         }
     }
 
-    /// <summary>Remove reported content and close the report.</summary>
     [HttpPost("/api/forum/communities/{slug}/mod-queue/{reportId:guid}/remove")]
     [EnableRateLimiting("write")]
     public async Task<IActionResult> RemoveContent(
@@ -189,7 +220,6 @@ public sealed class ModerationController : ControllerBase
         }
     }
 
-    /// <summary>Dismiss a report as unfounded.</summary>
     [HttpPost("/api/forum/communities/{slug}/mod-queue/{reportId:guid}/dismiss")]
     [EnableRateLimiting("write")]
     public async Task<IActionResult> DismissReport(

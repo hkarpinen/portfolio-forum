@@ -11,7 +11,9 @@ public sealed record CommentDto(
     DateTime? EditedAt,
     DateTime? DeletedAt,
     Guid? ParentCommentId,
-    int VoteScore);
+    int VoteScore,
+    /// <summary>Null when not voted, or signed out.</summary>
+    MyVoteDto? MyVote);
 
 public sealed record CommentTreeNodeDto(CommentDto Comment, IReadOnlyCollection<CommentTreeNodeDto> Children);
 public sealed record CommentTreeDto(IReadOnlyCollection<CommentTreeNodeDto> RootComments);

@@ -24,11 +24,42 @@ internal sealed class ThreadQuery : IThreadQuery
             && t.DeletedAt == null
             && t.Status == ThreadStatus.Published);
         var total = await query.CountAsync(cancellationToken);
-        var items = await query
-            .OrderByDescending(t => t.CreatedAt)
-            .Skip((request.Page - 1) * request.PageSize)
-            .Take(request.PageSize)
-            .ToListAsync(cancellationToken);
+
+        // "hot" needs reply counts before it can order, so it ranks a bounded candidate
+        // window in memory. "new" and "top" order in SQL.
+        List<ForumThread> items;
+        Dictionary<ThreadId, int> commentCountMap;
+
+        if (request.Sort == "hot")
+        {
+            var candidates = await query
+                .OrderByDescending(t => t.CreatedAt)
+                .Take(Math.Max(500, request.Page * request.PageSize * 4))
+                .ToListAsync(cancellationToken);
+            commentCountMap = await CountCommentsAsync(
+                candidates.Select(t => t.Id).ToList(), cancellationToken);
+            items = candidates
+                .OrderByDescending(t =>
+                {
+                    commentCountMap.TryGetValue(t.Id, out var cc);
+                    return HotRankingEngine.CalculateHotScore(t.CreatedAt, t.VoteScore, cc);
+                })
+                .Skip((request.Page - 1) * request.PageSize)
+                .Take(request.PageSize)
+                .ToList();
+        }
+        else
+        {
+            var ordered = request.Sort == "top"
+                ? query.OrderByDescending(t => t.VoteScore).ThenByDescending(t => t.CreatedAt)
+                : query.OrderByDescending(t => t.CreatedAt);
+            items = await ordered
+                .Skip((request.Page - 1) * request.PageSize)
+                .Take(request.PageSize)
+                .ToListAsync(cancellationToken);
+            commentCountMap = await CountCommentsAsync(
+                items.Select(t => t.Id).ToList(), cancellationToken);
+        }
 
         var authorIds = items.Select(t => t.AuthorId).Distinct().ToList();
         var projections = await _db.UserProjections
@@ -40,14 +71,40 @@ internal sealed class ThreadQuery : IThreadQuery
         var responses = items.Select(t =>
         {
             projDict.TryGetValue(t.AuthorId, out var proj);
-            var hotScore = HotRankingEngine.CalculateHotScore(t.CreatedAt, t.VoteScore, 0);
+            commentCountMap.TryGetValue(t.Id, out var commentCount);
+            var hotScore = HotRankingEngine.CalculateHotScore(t.CreatedAt, t.VoteScore, commentCount);
             return new ThreadSummaryDto(
                 t.Id.Value, t.CommunityId.Value, t.AuthorId.Value,
                 proj?.EffectiveName, proj?.AvatarUrl, t.Title, t.Tags,
-                t.CreatedAt, hotScore, t.VoteScore);
+                t.CreatedAt, hotScore, t.VoteScore, commentCount, Excerpt(t.Content));
         }).ToList();
 
         return new ThreadListDto(responses, total);
+    }
+
+    /// <summary>Cut on a word boundary, and ellipsised only if something was dropped.</summary>
+    private static string? Excerpt(string? content)
+    {
+        if (string.IsNullOrWhiteSpace(content)) return null;
+        var flat = string.Join(' ', content.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        if (flat.Length <= 160) return flat;
+        var cut = flat[..160];
+        var lastSpace = cut.LastIndexOf(' ');
+        if (lastSpace > 100) cut = cut[..lastSpace];
+        return cut.TrimEnd(',', '.', ';', ':') + "…";
+    }
+
+    /// <summary>Excludes deleted comments.</summary>
+    private async Task<Dictionary<ThreadId, int>> CountCommentsAsync(
+        List<ThreadId> threadIds, CancellationToken cancellationToken)
+    {
+        if (threadIds.Count == 0) return new Dictionary<ThreadId, int>();
+        var counts = await _db.Comments
+            .Where(c => threadIds.Contains(c.ThreadId) && c.DeletedAt == null)
+            .GroupBy(c => c.ThreadId)
+            .Select(g => new { ThreadId = g.Key, Count = g.Count() })
+            .ToListAsync(cancellationToken);
+        return counts.ToDictionary(x => x.ThreadId, x => x.Count);
     }
 
     public async Task<ThreadDto?> GetDetailAsync(ThreadDetailCommand request, CancellationToken cancellationToken = default)
@@ -60,12 +117,28 @@ internal sealed class ThreadQuery : IThreadQuery
         if (thread is null) return null;
 
         var proj = await _db.UserProjections.AsNoTracking().FirstOrDefaultAsync(p => p.Id == thread.AuthorId, cancellationToken);
-        var hotScore = HotRankingEngine.CalculateHotScore(thread.CreatedAt, thread.VoteScore, 0);
+
+        var commentCount = await _db.Comments
+            .CountAsync(c => c.ThreadId == thread.Id && c.DeletedAt == null, cancellationToken);
+        var hotScore = HotRankingEngine.CalculateHotScore(thread.CreatedAt, thread.VoteScore, commentCount);
+
+        MyVoteDto? myVote = null;
+        if (request.CallerId is { } callerId)
+        {
+            var voterId = new UserId(callerId);
+            var vote = await _db.Votes.AsNoTracking().FirstOrDefaultAsync(
+                v => v.UserId == voterId
+                     && v.TargetType == VoteTargetType.Thread
+                     && v.TargetId == thread.Id.Value,
+                cancellationToken);
+            if (vote is not null) myVote = new MyVoteDto(vote.Id.Value, (int)vote.Direction);
+        }
+
         return new ThreadDto(
             thread.Id.Value, thread.CommunityId.Value, thread.AuthorId.Value,
             proj?.EffectiveName, proj?.AvatarUrl, thread.Title, thread.Content, thread.Tags,
             thread.CreatedAt, thread.EditedAt, thread.IsLocked, thread.IsPinned,
-            thread.DeletedAt, hotScore, thread.VoteScore);
+            thread.DeletedAt, hotScore, thread.VoteScore, myVote);
     }
 
     public async Task<FeedListDto> ListFeedAsync(FeedCommand request, CancellationToken cancellationToken = default)
@@ -80,7 +153,6 @@ internal sealed class ThreadQuery : IThreadQuery
             .Take(Math.Max(500, request.Page * request.PageSize * 4))
             .ToListAsync(cancellationToken);
 
-        // Load comment counts for all candidates — needed for correct hot scoring
         var candidateIds = candidates.Select(t => t.Id).ToList();
         var commentCounts = await _db.Comments
             .Where(c => candidateIds.Contains(c.ThreadId) && c.DeletedAt == null)
@@ -135,7 +207,7 @@ internal sealed class ThreadQuery : IThreadQuery
                 community?.Slug, community?.Name,
                 t.AuthorId.Value,
                 proj?.EffectiveName, proj?.AvatarUrl, t.Title, t.Tags,
-                t.CreatedAt, hotScore, t.VoteScore, commentCount, t.IsPinned);
+                t.CreatedAt, hotScore, t.VoteScore, commentCount, t.IsPinned, Excerpt(t.Content));
         }).ToList();
 
         return new FeedListDto(responses, total);
@@ -160,13 +232,17 @@ internal sealed class ThreadQuery : IThreadQuery
 
         var proj = await _db.UserProjections.AsNoTracking().FirstOrDefaultAsync(p => p.Id == authorUserId, cancellationToken);
 
+        var authorCommentCounts = await CountCommentsAsync(
+            items.Select(t => t.Id).ToList(), cancellationToken);
+
         var responses = items.Select(t =>
         {
-            var hotScore = HotRankingEngine.CalculateHotScore(t.CreatedAt, t.VoteScore, 0);
+            authorCommentCounts.TryGetValue(t.Id, out var commentCount);
+            var hotScore = HotRankingEngine.CalculateHotScore(t.CreatedAt, t.VoteScore, commentCount);
             return new ThreadSummaryDto(
                 t.Id.Value, t.CommunityId.Value, t.AuthorId.Value,
                 proj?.EffectiveName, proj?.AvatarUrl, t.Title, t.Tags,
-                t.CreatedAt, hotScore, t.VoteScore);
+                t.CreatedAt, hotScore, t.VoteScore, commentCount, Excerpt(t.Content));
         }).ToList();
         return new ThreadListDto(responses, total);
     }
@@ -216,7 +292,6 @@ internal sealed class ThreadQuery : IThreadQuery
                 CreatedAt: t.CreatedAt,
                 RankScore: HotRankingEngine.CalculateHotScore(t.CreatedAt, 0, 0))));
 
-            // Backfill community slugs
             var communityIds = threads.Select(t => t.CommunityId).Distinct().ToList();
             var communityMap = await _db.Communities
                 .Where(c => communityIds.Contains(c.Id))
@@ -247,10 +322,8 @@ internal sealed class ThreadQuery : IThreadQuery
         return new SearchDto(page, ordered.Count);
     }
 
-    // ── Author-scoped draft reads ────────────────────────────────────────────
-    // Drafts are private to their author. Every method here filters on
-    // `AuthorId == authorId AND Status == Draft AND DeletedAt == null` so
-    // there's no path that surfaces another user's drafts.
+    // Drafts are private: every method here filters on author, Draft status and
+    // not-deleted, so no path can surface another user's.
 
     public async Task<IReadOnlyList<ThreadSummaryDto>> ListDraftsByAuthorAsync(Guid authorId, CancellationToken cancellationToken = default)
     {
@@ -268,9 +341,9 @@ internal sealed class ThreadQuery : IThreadQuery
         return drafts.Select(t => new ThreadSummaryDto(
             t.Id.Value, t.CommunityId.Value, t.AuthorId.Value,
             proj?.EffectiveName, proj?.AvatarUrl, t.Title, t.Tags,
-            // Drafts haven't been published, so HotScore is meaningless —
-            // surface 0 rather than a stale hot-rank against the SavedAt.
-            t.CreatedAt, 0d, t.VoteScore)).ToList();
+            // HotScore is meaningless before publication, so it surfaces 0 rather than a
+            // stale rank. A draft has no replies by construction.
+            t.CreatedAt, 0d, t.VoteScore, 0, Excerpt(t.Content))).ToList();
     }
 
     public async Task<ThreadDto?> GetDraftByIdAsync(Guid authorId, Guid threadId, CancellationToken cancellationToken = default)
@@ -291,7 +364,8 @@ internal sealed class ThreadQuery : IThreadQuery
             draft.Id.Value, draft.CommunityId.Value, draft.AuthorId.Value,
             proj?.EffectiveName, proj?.AvatarUrl, draft.Title, draft.Content, draft.Tags,
             draft.CreatedAt, draft.EditedAt, draft.IsLocked, draft.IsPinned,
-            draft.DeletedAt, 0d, draft.VoteScore);
+            // A draft is unpublished and unvotable, so there is no caller vote.
+            draft.DeletedAt, 0d, draft.VoteScore, null);
     }
 
     public async Task<int> CountDraftsByAuthorAsync(Guid authorId, CancellationToken cancellationToken = default)

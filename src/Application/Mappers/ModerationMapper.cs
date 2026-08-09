@@ -13,6 +13,7 @@ public static class ModerationMapper
         ban.Reason,
         ban.UnbannedAt);
 
+    /// <summary>Left null — only the query can batch the projection lookup.</summary>
     public static ModerationLogEntryDto ToDto(ModerationLog log) => new(
         log.Id.Value,
         log.CommunityId.Value,
@@ -20,5 +21,7 @@ public static class ModerationMapper
         log.PerformedBy.Value,
         log.TargetUserId?.Value,
         log.TargetContent,
-        log.PerformedAt);
+        log.PerformedAt,
+        null,
+        null);
 }

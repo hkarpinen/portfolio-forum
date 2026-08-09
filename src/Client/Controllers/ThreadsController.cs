@@ -48,13 +48,13 @@ public sealed class ThreadsController : ControllerBase
 
     [HttpGet]
     [AllowAnonymous]
-    public async Task<IActionResult> List([FromQuery] Guid communityId, [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 20, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> List([FromQuery] Guid communityId, [FromQuery] string sort = "new",
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 20, CancellationToken cancellationToken = default)
     {
         if (communityId == Guid.Empty)
             return Problem(detail: "Query parameter 'communityId' is required.", statusCode: StatusCodes.Status400BadRequest);
 
-        var result = await _threadQuery.ListAsync(new ListThreadsCommand(communityId, page, pageSize), cancellationToken);
+        var result = await _threadQuery.ListAsync(new ListThreadsCommand(communityId, sort, page, pageSize), cancellationToken);
         return Ok(result);
     }
 
@@ -71,7 +71,7 @@ public sealed class ThreadsController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> GetById([FromRoute] Guid id, CancellationToken cancellationToken)
     {
-        var result = await _threadQuery.GetDetailAsync(new ThreadDetailCommand(id), cancellationToken);
+        var result = await _threadQuery.GetDetailAsync(new ThreadDetailCommand(id, User.GetUserIdOrNull()), cancellationToken);
         return result is null ? NotFound() : Ok(result);
     }
 
@@ -90,8 +90,16 @@ public sealed class ThreadsController : ControllerBase
     [EnableRateLimiting("write")]
     public async Task<IActionResult> Delete([FromRoute] Guid id, CancellationToken cancellationToken)
     {
-        var result = await _threadWorkflowManager.DeleteAsync(new DeleteThreadCommand(id), cancellationToken);
-        return result is null ? NotFound() : Ok(result);
+        try
+        {
+            var result = await _threadWorkflowManager.DeleteAsync(
+                new DeleteThreadCommand(id, User.GetRequiredUserId()), cancellationToken);
+            return result is null ? NotFound() : Ok(result);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
     }
 
     [HttpPost("{id:guid}/lock")]
@@ -99,8 +107,16 @@ public sealed class ThreadsController : ControllerBase
     [EnableRateLimiting("write")]
     public async Task<IActionResult> Lock([FromRoute] Guid id, CancellationToken cancellationToken)
     {
-        var result = await _threadWorkflowManager.LockAsync(new LockThreadCommand(id), cancellationToken);
-        return result is null ? NotFound() : Ok(result);
+        try
+        {
+            var result = await _threadWorkflowManager.LockAsync(
+                new LockThreadCommand(id, User.GetRequiredUserId()), cancellationToken);
+            return result is null ? NotFound() : Ok(result);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
     }
 
     [HttpPost("{id:guid}/pin")]
@@ -108,8 +124,16 @@ public sealed class ThreadsController : ControllerBase
     [EnableRateLimiting("write")]
     public async Task<IActionResult> Pin([FromRoute] Guid id, CancellationToken cancellationToken)
     {
-        var result = await _threadWorkflowManager.PinAsync(new PinThreadCommand(id), cancellationToken);
-        return result is null ? NotFound() : Ok(result);
+        try
+        {
+            var result = await _threadWorkflowManager.PinAsync(
+                new PinThreadCommand(id, User.GetRequiredUserId()), cancellationToken);
+            return result is null ? NotFound() : Ok(result);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
     }
 
     [HttpGet("/api/forum/search")]

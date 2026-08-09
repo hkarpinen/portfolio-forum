@@ -18,6 +18,18 @@ internal sealed class ReportRepository : IReportRepository
     public Task<Report?> GetByIdAsync(ReportId id, CancellationToken cancellationToken = default)
         => _dbContext.Reports.FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
 
+    public async Task<IReadOnlyList<Report>> ListOpenByTargetAsync(
+        CommunityId communityId,
+        ReportTargetType targetType,
+        Guid targetId,
+        CancellationToken cancellationToken = default)
+        => await _dbContext.Reports
+            .Where(r => r.CommunityId == communityId
+                && r.TargetType == targetType
+                && r.TargetId == targetId
+                && r.Status == ReportStatus.Open)
+            .ToListAsync(cancellationToken);
+
     public async Task AddAsync(Report report, CancellationToken cancellationToken = default)
     {
         await _dbContext.Reports.AddAsync(report, cancellationToken);

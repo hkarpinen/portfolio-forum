@@ -13,9 +13,7 @@ public interface IThreadQuery
     Task<FeedListDto> ListFeedAsync(FeedCommand command, CancellationToken cancellationToken = default);
     Task<SearchDto> SearchAsync(SearchQueryCommand command, CancellationToken cancellationToken = default);
 
-    // Author-scoped draft reads. All three must enforce the
-    // `Status == Draft AND AuthorId == authorId` filter at the data layer
-    // — drafts are private to their author.
+    // Drafts are private: all three MUST filter on author and Draft status in SQL.
     Task<IReadOnlyList<ThreadSummaryDto>> ListDraftsByAuthorAsync(Guid authorId, CancellationToken cancellationToken = default);
     Task<ThreadDto?> GetDraftByIdAsync(Guid authorId, Guid threadId, CancellationToken cancellationToken = default);
     Task<int> CountDraftsByAuthorAsync(Guid authorId, CancellationToken cancellationToken = default);

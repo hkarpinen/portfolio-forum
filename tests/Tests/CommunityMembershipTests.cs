@@ -12,14 +12,11 @@ public class CommunityMembershipTests
     [Fact]
     public void Create_ShouldSetProperties()
     {
-        // Arrange
         var communityId = new CommunityId(Guid.NewGuid());
         var userId = new UserId(Guid.NewGuid());
 
-        // Act
         var membership = CommunityMembership.Create(communityId, userId);
 
-        // Assert
         Assert.Equal(communityId, membership.CommunityId);
         Assert.Equal(userId, membership.UserId);
         Assert.Equal(CommunityRole.Member, membership.Role);

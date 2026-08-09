@@ -13,17 +13,23 @@ internal sealed class ModerationManager : IModerationManager
     private readonly IModerationLogRepository _moderationLogRepository;
     private readonly IReportRepository _reportRepository;
     private readonly IMembershipRepository _membershipRepository;
+    private readonly IThreadRepository _threadRepository;
+    private readonly ICommentRepository _commentRepository;
 
     public ModerationManager(
         IBanRepository banRepository,
         IModerationLogRepository moderationLogRepository,
         IReportRepository reportRepository,
-        IMembershipRepository membershipRepository)
+        IMembershipRepository membershipRepository,
+        IThreadRepository threadRepository,
+        ICommentRepository commentRepository)
     {
         _banRepository = banRepository;
         _moderationLogRepository = moderationLogRepository;
         _reportRepository = reportRepository;
         _membershipRepository = membershipRepository;
+        _threadRepository = threadRepository;
+        _commentRepository = commentRepository;
     }
 
     public async Task<BanDto> BanAsync(BanUserCommand command, CancellationToken cancellationToken = default)
@@ -104,12 +110,10 @@ internal sealed class ModerationManager : IModerationManager
 
     public async Task ApproveReportAsync(ApproveReportCommand command, CancellationToken cancellationToken = default)
     {
-        var report = await _reportRepository.GetByIdAsync(new ReportId(command.ReportId), cancellationToken)
-            ?? throw new InvalidOperationException($"Report {command.ReportId} not found.");
+        var (report, siblings, moderatorId) = await OpenGroupAsync(command.ReportId, command.ModeratorId, cancellationToken);
 
-        var moderatorId = new UserId(command.ModeratorId);
-        await EnsureCommunityModeratorAsync(report.CommunityId, moderatorId, cancellationToken);
-        report.Approve(moderatorId);
+        foreach (var sibling in siblings)
+            sibling.Approve(moderatorId);
 
         var log = ModerationLog.Create(
             report.CommunityId,
@@ -122,21 +126,59 @@ internal sealed class ModerationManager : IModerationManager
         await _reportRepository.CommitAsync(cancellationToken);
     }
 
+    /// <summary>
+    /// Soft-deletes the content — the same delete the author's own performs, so the
+    /// existing filters take it off every surface — and closes every open report on it.
+    ///
+    /// Logged as DeleteThread/DeleteComment, not as a report resolution, so the public
+    /// log names the content and reason rather than an internal report id.
+    /// </summary>
     public async Task RemoveContentAsync(RemoveContentCommand command, CancellationToken cancellationToken = default)
     {
-        var report = await _reportRepository.GetByIdAsync(new ReportId(command.ReportId), cancellationToken)
-            ?? throw new InvalidOperationException($"Report {command.ReportId} not found.");
+        var (report, siblings, moderatorId) = await OpenGroupAsync(command.ReportId, command.ModeratorId, cancellationToken);
 
-        var moderatorId = new UserId(command.ModeratorId);
-        await EnsureCommunityModeratorAsync(report.CommunityId, moderatorId, cancellationToken);
-        report.RemoveContent(moderatorId);
+        UserId? targetAuthorId = null;
+        var action = ModerationAction.DeleteThread;
+
+        if (report.TargetType == ReportTargetType.Thread)
+        {
+            var thread = await _threadRepository.GetByIdAsync(new ThreadId(report.TargetId), cancellationToken);
+            if (thread is not null)
+            {
+                thread.Delete(DateTime.UtcNow);
+                await _threadRepository.UpdateAsync(thread, cancellationToken);
+                targetAuthorId = thread.AuthorId;
+            }
+        }
+        else if (report.TargetType == ReportTargetType.Comment)
+        {
+            action = ModerationAction.DeleteComment;
+            var comment = await _commentRepository.GetByIdAsync(new CommentId(report.TargetId), cancellationToken);
+            if (comment is not null)
+            {
+                comment.Delete(DateTime.UtcNow);
+                await _commentRepository.UpdateAsync(comment, cancellationToken);
+                targetAuthorId = comment.AuthorId;
+            }
+        }
+
+        // The group's DOMINANT reason, which is what the moderator saw. The named
+        // report is only the newest, so its reason can disagree with the card.
+        var reason = siblings
+            .GroupBy(r => r.Reason)
+            .OrderByDescending(g => g.Count())
+            .ThenByDescending(g => g.Max(r => r.ReportedAt))
+            .First().Key;
+
+        foreach (var sibling in siblings)
+            sibling.RemoveContent(moderatorId);
 
         var log = ModerationLog.Create(
             report.CommunityId,
-            ModerationAction.ResolveReportRemoved,
+            action,
             moderatorId,
-            null,
-            $"Removed content for report {report.Id.Value} ({report.TargetType}: {report.TargetId})");
+            targetAuthorId,
+            reason);
 
         await _moderationLogRepository.AddAsync(log, cancellationToken);
         await _reportRepository.CommitAsync(cancellationToken);
@@ -144,12 +186,10 @@ internal sealed class ModerationManager : IModerationManager
 
     public async Task DismissReportAsync(DismissReportCommand command, CancellationToken cancellationToken = default)
     {
-        var report = await _reportRepository.GetByIdAsync(new ReportId(command.ReportId), cancellationToken)
-            ?? throw new InvalidOperationException($"Report {command.ReportId} not found.");
+        var (report, siblings, moderatorId) = await OpenGroupAsync(command.ReportId, command.ModeratorId, cancellationToken);
 
-        var moderatorId = new UserId(command.ModeratorId);
-        await EnsureCommunityModeratorAsync(report.CommunityId, moderatorId, cancellationToken);
-        report.Dismiss(moderatorId);
+        foreach (var sibling in siblings)
+            sibling.Dismiss(moderatorId);
 
         var log = ModerationLog.Create(
             report.CommunityId,
@@ -163,10 +203,34 @@ internal sealed class ModerationManager : IModerationManager
     }
 
     /// <summary>
-    /// Authorizes a report-resolution action against the report's own community.
-    /// The caller must hold a moderator or owner role in that specific community —
-    /// class-level <c>MemberOrAbove</c> only proves membership in *some* community,
-    /// which would otherwise let any member resolve any community's mod queue.
+    /// Returns every still-open report on the same content, the named one included.
+    /// One click must close the whole group or the card reappears on the next refetch.
+    /// </summary>
+    private async Task<(Report Report, IReadOnlyList<Report> Siblings, UserId ModeratorId)> OpenGroupAsync(
+        Guid reportId,
+        Guid moderatorGuid,
+        CancellationToken cancellationToken)
+    {
+        var report = await _reportRepository.GetByIdAsync(new ReportId(reportId), cancellationToken)
+            ?? throw new InvalidOperationException($"Report {reportId} not found.");
+
+        var moderatorId = new UserId(moderatorGuid);
+        await EnsureCommunityModeratorAsync(report.CommunityId, moderatorId, cancellationToken);
+
+        var siblings = await _reportRepository.ListOpenByTargetAsync(
+            report.CommunityId, report.TargetType, report.TargetId, cancellationToken);
+
+        // It may be absent if a concurrent moderator already closed it — still attempt
+        // the transition so the caller gets the "already resolved" error.
+        if (!siblings.Any(s => s.Id == report.Id))
+            siblings = siblings.Append(report).ToList();
+
+        return (report, siblings, moderatorId);
+    }
+
+    /// <summary>
+    /// Must moderate THAT community. The class-level policy only proves membership in
+    /// some community, which would let any member resolve any community's queue.
     /// </summary>
     private async Task EnsureCommunityModeratorAsync(
         CommunityId communityId,

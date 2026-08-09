@@ -53,10 +53,8 @@ public sealed class CommunitiesController : ControllerBase
         [FromQuery] string? membership = null,
         CancellationToken cancellationToken = default)
     {
-        // `?membership=mine` filters to the caller's joined communities so the
-        // "Your communities" sidebar fits in one round-trip. Anonymous users
-        // with that filter get an empty list rather than 401 — the page is
-        // still public-readable and a friendly empty state is fine.
+        // An anonymous caller passing `membership=mine` gets an empty list, not a 401 —
+        // the page stays public-readable.
         Guid? membershipUserId = null;
         if (string.Equals(membership, "mine", StringComparison.OrdinalIgnoreCase))
         {

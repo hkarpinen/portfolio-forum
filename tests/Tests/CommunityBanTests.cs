@@ -12,14 +12,11 @@ public class CommunityBanTests
     [Fact]
     public void Create_ShouldSetProperties()
     {
-        // Arrange
         var communityId = new CommunityId(Guid.NewGuid());
         var userId = new UserId(Guid.NewGuid());
 
-        // Act
         var ban = CommunityBan.Create(communityId, userId, "Spamming");
 
-        // Assert
         Assert.Equal(communityId, ban.CommunityId);
         Assert.Equal(userId, ban.UserId);
         Assert.Equal("Spamming", ban.Reason);

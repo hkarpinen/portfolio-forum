@@ -11,32 +11,42 @@ namespace Forum.Application.Managers;
 
 internal sealed class ThreadWorkflowManager : IThreadWorkflowManager
 {
-    /// <summary>
-    /// Caller-side guardrail on how many in-progress drafts a single author
-    /// may hold at once. The check is small enough to live in the Manager
-    /// rather than a dedicated policy Engine — promote it out if the rule
-    /// grows (tier-based, community-scoped, etc.).
-    /// </summary>
+    /// <summary>Cap on in-progress drafts per author.</summary>
     private const int DraftCap = 50;
 
     private readonly IThreadRepository _threadRepository;
     private readonly ICommunityRepository _communityRepository;
     private readonly IThreadQuery _threadQuery;
+    private readonly IBanRepository _banRepository;
+    private readonly IMembershipRepository _membershipRepository;
+    private readonly IModerationLogRepository _moderationLogRepository;
 
     public ThreadWorkflowManager(
         IThreadRepository threadRepository,
         ICommunityRepository communityRepository,
-        IThreadQuery threadQuery)
+        IThreadQuery threadQuery,
+        IBanRepository banRepository,
+        IMembershipRepository membershipRepository,
+        IModerationLogRepository moderationLogRepository)
     {
         _threadRepository = threadRepository;
         _communityRepository = communityRepository;
         _threadQuery = threadQuery;
+        _banRepository = banRepository;
+        _membershipRepository = membershipRepository;
+        _moderationLogRepository = moderationLogRepository;
     }
 
     public async Task<ThreadMutationDto> CreateAsync(CreateThreadCommand command, CancellationToken cancellationToken = default)
     {
         if (SpamDetectionEngine.IsSpam(command.Content ?? command.Title, command.AuthorId))
             throw new InvalidOperationException("Content was rejected as spam.");
+
+        // The Moderation screen promises "a ban hides their future posts", so this is the guard
+        // that makes it true — a CommunityBan row nothing checked would be a lie on screen.
+        if (await _banRepository.IsBannedAsync(
+                new CommunityId(command.CommunityId), new UserId(command.AuthorId), cancellationToken))
+            throw new UnauthorizedAccessException("You are banned from this community.");
 
         var thread = ForumThread.Create(
             new CommunityId(command.CommunityId),
@@ -70,6 +80,10 @@ internal sealed class ThreadWorkflowManager : IThreadWorkflowManager
         var thread = await _threadRepository.GetByIdAsync(new ThreadId(command.ThreadId), cancellationToken);
         if (thread is null) return null;
 
+        var callerId = new UserId(command.CallerId);
+        if (thread.AuthorId != callerId)
+            await EnsureModeratorAsync(thread.CommunityId, callerId, cancellationToken);
+
         thread.Delete(DateTime.UtcNow);
         await _threadRepository.UpdateAsync(thread, cancellationToken);
         await _threadRepository.CommitAsync(cancellationToken);
@@ -81,8 +95,18 @@ internal sealed class ThreadWorkflowManager : IThreadWorkflowManager
         var thread = await _threadRepository.GetByIdAsync(new ThreadId(command.ThreadId), cancellationToken);
         if (thread is null) return null;
 
+        var callerId = new UserId(command.CallerId);
+        await EnsureModeratorAsync(thread.CommunityId, callerId, cancellationToken);
+
         thread.Lock(DateTime.UtcNow);
         await _threadRepository.UpdateAsync(thread, cancellationToken);
+
+        // Locking is logged: the community's log is public, and this is the action a
+        // reader is most likely to ask about.
+        await _moderationLogRepository.AddAsync(
+            ModerationLog.Create(thread.CommunityId, ModerationAction.LockThread, callerId, null, thread.Title),
+            cancellationToken);
+
         await _threadRepository.CommitAsync(cancellationToken);
         return ThreadResponseFactory.ToMutation(thread);
     }
@@ -92,13 +116,27 @@ internal sealed class ThreadWorkflowManager : IThreadWorkflowManager
         var thread = await _threadRepository.GetByIdAsync(new ThreadId(command.ThreadId), cancellationToken);
         if (thread is null) return null;
 
+        var callerId = new UserId(command.CallerId);
+        await EnsureModeratorAsync(thread.CommunityId, callerId, cancellationToken);
+
         thread.Pin(DateTime.UtcNow);
         await _threadRepository.UpdateAsync(thread, cancellationToken);
+
+        await _moderationLogRepository.AddAsync(
+            ModerationLog.Create(thread.CommunityId, ModerationAction.PinThread, callerId, null, thread.Title),
+            cancellationToken);
+
         await _threadRepository.CommitAsync(cancellationToken);
         return ThreadResponseFactory.ToMutation(thread);
     }
 
-    // ── Draft authoring lifecycle ────────────────────────────────────────────
+    /// <summary>Must moderate the thread's OWN community — membership elsewhere proves nothing.</summary>
+    private async Task EnsureModeratorAsync(CommunityId communityId, UserId callerId, CancellationToken cancellationToken)
+    {
+        var membership = await _membershipRepository.GetByUserAndCommunityAsync(callerId, communityId, cancellationToken);
+        if (membership?.Role is not (CommunityRole.Owner or CommunityRole.Moderator))
+            throw new UnauthorizedAccessException("Only a moderator or owner of this community can do that.");
+    }
 
     public async Task<ThreadMutationDto> BeginDraftAsync(BeginDraftCommand command, CancellationToken cancellationToken = default)
     {
@@ -136,10 +174,8 @@ internal sealed class ThreadWorkflowManager : IThreadWorkflowManager
         var thread = await _threadRepository.GetByIdAsync(new ThreadId(command.ThreadId), cancellationToken);
         if (thread is null) return null;
 
-        // The `ThreadCreated` event needs the community slug; the thread
-        // aggregate only carries the CommunityId. Fetch the slug here so
-        // the published-thread event consumers can build URLs without an
-        // extra hop. Slug lookup is one read per publish — acceptable.
+        // The event carries the slug so consumers can build URLs; the aggregate holds
+        // only the id, so it costs one read per publish.
         var community = await _communityRepository.GetByIdAsync(thread.CommunityId, cancellationToken);
         if (community is null)
             throw new InvalidOperationException($"Community {thread.CommunityId.Value} not found.");

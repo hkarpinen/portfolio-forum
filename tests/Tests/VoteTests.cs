@@ -12,14 +12,11 @@ public class VoteTests
     [Fact]
     public void Create_ShouldSetProperties()
     {
-        // Arrange
         var targetId = Guid.NewGuid();
         var userId = new UserId(Guid.NewGuid());
 
-        // Act
         var vote = Vote.Create(VoteTargetType.Comment, targetId, userId, VoteDirection.Downvote);
 
-        // Assert
         Assert.Equal(VoteTargetType.Comment, vote.TargetType);
         Assert.Equal(targetId, vote.TargetId);
         Assert.Equal(userId, vote.UserId);

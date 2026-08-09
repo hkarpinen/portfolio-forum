@@ -8,13 +8,8 @@ using Microsoft.AspNetCore.RateLimiting;
 
 namespace Client.Controllers;
 
-/// <summary>
-/// `/api/forum/drafts/...` is a route grouping around the authoring
-/// surface — a draft *is* a `ForumThread` with `Status = Draft`, so
-/// reads and writes go through `IThreadWorkflowManager` and `IThreadQuery`.
-/// The URL surface is kept distinct from `/threads` because that's the
-/// author's mental model; the underlying aggregate is the same.
-/// </summary>
+/// <summary>A separate URL surface over the SAME aggregate — a draft is a thread
+/// in Draft status.</summary>
 [ApiController]
 [Route("api/forum/drafts")]
 [Authorize]

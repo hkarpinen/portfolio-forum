@@ -1,7 +1,6 @@
 namespace Infrastructure.Messaging.Events;
 
-/// <summary>Wire shapes for forum domain events published via the outbox to RabbitMQ.
-/// Must match the flat camelCase JSON produced by OutboxExtensions.AddToOutbox.</summary>
+/// <summary>Must match the flat camelCase JSON the outbox produces.</summary>
 /// 
 public sealed record ForumThreadCreatedEvent(
     Guid ThreadId,

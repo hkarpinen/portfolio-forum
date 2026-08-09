@@ -11,9 +11,8 @@ public interface IThreadWorkflowManager
     Task<ThreadMutationDto?> LockAsync(LockThreadCommand command, CancellationToken cancellationToken = default);
     Task<ThreadMutationDto?> PinAsync(PinThreadCommand command, CancellationToken cancellationToken = default);
 
-    // Draft authoring lifecycle. A draft is a thread in `ThreadStatus.Draft`;
-    // these methods drive the transitions. The thread becomes publicly
-    // visible at `PublishDraftAsync`, which is when `ThreadCreated` fires.
+    // A draft is a thread in Draft status. It becomes public — and raises
+    // `ThreadCreated` — only on publish.
     Task<ThreadMutationDto> BeginDraftAsync(BeginDraftCommand command, CancellationToken cancellationToken = default);
     Task<ThreadMutationDto?> ReviseDraftAsync(ReviseDraftCommand command, CancellationToken cancellationToken = default);
     Task<ThreadMutationDto?> PublishDraftAsync(PublishDraftCommand command, CancellationToken cancellationToken = default);

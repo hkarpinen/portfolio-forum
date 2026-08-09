@@ -2,11 +2,8 @@ using System.Text.Json.Serialization;
 
 namespace Forum.Application.Dtos;
 
-/// <summary>
-/// Base type for polymorphic search results. The wire JSON carries an `itemType` discriminator
-/// chosen by <see cref="JsonPolymorphicAttribute"/>, so the frontend can switch on it instead of
-/// inspecting optional fields.
-/// </summary>
+/// <summary>The wire carries an `itemType` discriminator, so callers switch on it
+/// rather than probing optional fields.</summary>
 [JsonPolymorphic(TypeDiscriminatorPropertyName = "itemType")]
 [JsonDerivedType(typeof(ThreadSearchResultDto), "thread")]
 [JsonDerivedType(typeof(CommunitySearchResultDto), "community")]

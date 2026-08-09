@@ -18,6 +18,11 @@ internal sealed class BanRepository : IBanRepository
     public Task<CommunityBan?> GetByIdAsync(BanId id, CancellationToken cancellationToken = default)
         => _dbContext.Bans.FirstOrDefaultAsync(x => x.Id == id, cancellationToken);
 
+    public Task<bool> IsBannedAsync(CommunityId communityId, UserId userId, CancellationToken cancellationToken = default)
+        => _dbContext.Bans
+            .AsNoTracking()
+            .AnyAsync(b => b.CommunityId == communityId && b.UserId == userId && b.UnbannedAt == null, cancellationToken);
+
     public async Task AddAsync(CommunityBan ban, CancellationToken cancellationToken = default)
     {
         await _dbContext.Bans.AddAsync(ban, cancellationToken);

@@ -59,7 +59,7 @@ public sealed class CommentsController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> ListTree([FromRoute] Guid threadId, CancellationToken cancellationToken)
     {
-        var result = await _commentQuery.ListTreeAsync(new ListCommentTreeCommand(threadId), cancellationToken);
+        var result = await _commentQuery.ListTreeAsync(new ListCommentTreeCommand(threadId, User.GetUserIdOrNull()), cancellationToken);
         return Ok(result);
     }
 }

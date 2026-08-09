@@ -19,9 +19,7 @@ internal sealed class CommunityQuery : ICommunityQuery
 
     public async Task<CommunityListDto> ListAsync(ListCommunitiesCommand request, CancellationToken cancellationToken = default)
     {
-        // Filter to communities the caller is a member of when MembershipUserId
-        // is set. The "Your communities" sidebar on /forum uses this so it
-        // doesn't have to fetch all communities and intersect client-side.
+        // Filters to the caller's own communities when set.
         IQueryable<Forum.Domain.Aggregates.Community> baseQuery = _db.Communities.AsNoTracking();
         if (request.MembershipUserId is { } userId)
         {
@@ -39,18 +37,15 @@ internal sealed class CommunityQuery : ICommunityQuery
 
         var communityIds = communities.Select(c => c.Id).ToList();
 
-        // Load non-deleted threads for the page of communities.
         var allCandidateThreads = await _db.Threads
             .AsNoTracking()
             .Where(t => communityIds.Contains(t.CommunityId) && t.DeletedAt == null)
             .ToListAsync(cancellationToken);
 
-        // Thread counts per community
         var threadCountByCommunity = allCandidateThreads
             .GroupBy(t => t.CommunityId.Value)
             .ToDictionary(g => g.Key, g => g.Count());
 
-        // Comment counts per thread (used in hot score and total)
         var threadIdVOs = allCandidateThreads.Select(t => t.Id).ToList();
         Dictionary<Guid, int> commentCounts;
         if (threadIdVOs.Count == 0)
@@ -67,12 +62,10 @@ internal sealed class CommunityQuery : ICommunityQuery
             commentCounts = commentRows.ToDictionary(x => x.ThreadId.Value, x => x.Count);
         }
 
-        // Total comment count per community
         var commentCountByCommunity = allCandidateThreads
             .GroupBy(t => t.CommunityId.Value)
             .ToDictionary(g => g.Key, g => g.Sum(t => commentCounts.GetValueOrDefault(t.Id.Value, 0)));
 
-        // Member counts per community
         var memberRows = await _db.Memberships
             .Where(m => communityIds.Contains(m.CommunityId))
             .GroupBy(m => m.CommunityId)
@@ -80,7 +73,7 @@ internal sealed class CommunityQuery : ICommunityQuery
             .ToListAsync(cancellationToken);
         var memberCountByCommunity = memberRows.ToDictionary(x => x.CommunityId.Value, x => x.Count);
 
-        // Pick the hottest thread per community (score already on the row — no votes join)
+        // Score is already on the row, so no votes join is needed here.
         var hottestByCommunity = allCandidateThreads
             .GroupBy(t => t.CommunityId)
             .ToDictionary(
@@ -91,10 +84,8 @@ internal sealed class CommunityQuery : ICommunityQuery
                     commentCounts.GetValueOrDefault(t.Id.Value, 0)
                 )).First());
 
-        // Fetch user projections for thread authors + latest reply authors
         var authorUserIds = hottestByCommunity.Values.Select(t => t.AuthorId).Distinct().ToList();
 
-        // Latest (non-deleted) reply per hottest thread
         var hottestThreadVOs = hottestByCommunity.Values.Select(t => t.Id).ToList();
         var latestReplyByThreadId = hottestThreadVOs.Count == 0
             ? new Dictionary<Guid, Comment>()
@@ -116,7 +107,6 @@ internal sealed class CommunityQuery : ICommunityQuery
                 .ToListAsync(cancellationToken))
                 .ToDictionary(p => p.Id.Value);
 
-        // Build responses ordered by best hot-score first
         var responses = communities
             .Select(c =>
             {

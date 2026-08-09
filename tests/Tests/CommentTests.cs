@@ -12,14 +12,11 @@ public class CommentTests
     [Fact]
     public void Create_ShouldSetProperties()
     {
-        // Arrange
         var threadId = new ThreadId(Guid.NewGuid());
         var authorId = new UserId(Guid.NewGuid());
 
-        // Act
         var comment = Comment.Create(threadId, authorId, "Hello");
 
-        // Assert
         Assert.Equal(threadId, comment.ThreadId);
         Assert.Equal(authorId, comment.AuthorId);
         Assert.Equal("Hello", comment.Content);
@@ -45,14 +42,11 @@ public class CommentTests
     [Fact]
     public void Edit_ShouldUpdateContentAndEditedAt()
     {
-        // Arrange
         var comment = CreateComment();
         var editedAt = DateTime.UtcNow.AddMinutes(5);
 
-        // Act
         comment.Edit("Updated", editedAt);
 
-        // Assert
         Assert.Equal("Updated", comment.Content);
         Assert.Equal(editedAt, comment.EditedAt);
     }

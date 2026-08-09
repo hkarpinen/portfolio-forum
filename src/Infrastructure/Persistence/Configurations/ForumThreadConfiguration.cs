@@ -54,10 +54,8 @@ internal sealed class ForumThreadConfiguration : IEntityTypeConfiguration<ForumT
             .HasDefaultValue(0)
             .IsRequired();
 
-        // Status discriminates draft-vs-published. Default Published so
-        // existing rows (created before this column existed) read as
-        // published — the only path that produces drafts is BeginDraft,
-        // which sets the column explicitly.
+        // Defaults to Published so rows predating this column read correctly; the only
+        // path producing a draft sets it explicitly.
         builder.Property(x => x.Status)
             .HasConversion<int>()
             .HasDefaultValue(ThreadStatus.Published)
@@ -66,8 +64,8 @@ internal sealed class ForumThreadConfiguration : IEntityTypeConfiguration<ForumT
         builder.Property(x => x.SavedAt)
             .HasColumnType("timestamptz");
 
-        // Tags column replaces the former single-value Flair. Stored as a text[] (postgres array).
-        // EF Core maps `IReadOnlyList<string>` over a private `_tags` backing field.
+        // Stored as a postgres text[]. EF Core maps `IReadOnlyList<string>` over a private `_tags`
+        // backing field.
         builder.Property<List<string>>("_tags")
             .HasColumnName("tags")
             .HasColumnType("text[]")

@@ -20,7 +20,7 @@ public sealed class Community : IAggregateRoot
     public DateTime CreatedAt { get; private set; }
     public DateTime? UpdatedAt { get; private set; }
 
-    /// <summary>Markdown-formatted community rules. ≤ 10000 chars.</summary>
+    /// <summary>Markdown. ≤ 10000 chars.</summary>
     public string? Rules { get; private set; }
 
     private Community() { }
@@ -93,11 +93,8 @@ public sealed class Community : IAggregateRoot
         _domainEvents.Add(new CommunityOwnershipTransferred(Id, previousOwner, newOwnerId, transferredAt));
     }
 
-    /// <summary>
-    /// Produce a URL-safe base slug from a display name. Lowercase ASCII alphanum + hyphens only.
-    /// Strips diacritics, collapses whitespace/punctuation to single hyphens, trims trailing hyphens.
-    /// Returns empty string if the name has no slug-able characters (caller must handle fallback).
-    /// </summary>
+    /// <summary>Returns EMPTY when the name has no slug-able characters — the caller
+    /// must handle that fallback.</summary>
     public static string Slugify(string name)
     {
         if (string.IsNullOrWhiteSpace(name)) return string.Empty;

@@ -15,10 +15,8 @@ internal sealed class OutboxPublisher : BackgroundService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<OutboxPublisher> _logger;
 
-    // Keys match the domain event type names stored by OutboxExtensions.AddToOutbox.
-    // Values are the wire-message types. Publishing to a MassTransit exchange
-    // means every subscriber (notifications, analytics, etc.) gets their own
-    // copy via their own bound queue — no competing-consumer race conditions.
+    // Stored event-type name → wire type. Publishing to an exchange gives every
+    // subscriber its own copy, so there is no competing-consumer race.
     private static readonly Dictionary<string, Type> EventTypeMap = new()
     {
         [nameof(ThreadCreated)]                  = typeof(ForumThreadCreatedEvent),
@@ -35,7 +33,10 @@ internal sealed class OutboxPublisher : BackgroundService
         [nameof(ModerationActionLogged)]         = typeof(ForumModerationActionLoggedEvent),
     };
 
-    // Must match OutboxExtensions.JsonOptions so Deserialize succeeds.
+    // Deliberately WITHOUT the id converters the outbox writes with. The outbox holds the domain
+    // event, but it is deserialised into the integration type above, whose ids are plain Guids —
+    // a flat guid string binds to those directly, and an id converter here would have nothing to
+    // convert.
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase

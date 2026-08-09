@@ -8,7 +8,8 @@ public static class CommentMapper
         Forum.Domain.Aggregates.Comment comment,
         string? authorName,
         string? authorAvatarUrl,
-        int voteScore) => new(
+        int voteScore,
+        MyVoteDto? myVote = null) => new(
         comment.Id.Value,
         comment.ThreadId.Value,
         comment.AuthorId.Value,
@@ -19,5 +20,6 @@ public static class CommentMapper
         comment.EditedAt,
         comment.DeletedAt,
         comment.ParentCommentId?.Value,
-        voteScore);
+        voteScore,
+        myVote);
 }

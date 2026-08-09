@@ -42,25 +42,44 @@ internal sealed class ModerationQuery : IModerationQuery
             .AsNoTracking()
             .Where(r => r.CommunityId == communityId && r.Status == ReportStatus.Open);
 
-        var total = await query.CountAsync(cancellationToken);
-        var reports = await query
-            .OrderByDescending(r => r.ReportedAt)
+        // A row is one piece of content, so paging AND the total count are over targets,
+        // not reports.
+        var total = await query
+            .Select(r => new { r.TargetType, r.TargetId })
+            .Distinct()
+            .CountAsync(cancellationToken);
+
+        var pageTargets = await query
+            .GroupBy(r => new { r.TargetType, r.TargetId })
+            .Select(g => new { g.Key.TargetType, g.Key.TargetId, Latest = g.Max(r => r.ReportedAt) })
+            .OrderByDescending(g => g.Latest)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(cancellationToken);
 
-        if (reports.Count == 0)
+        if (pageTargets.Count == 0)
             return new ModerationQueueDto(Array.Empty<ModerationQueueItemDto>(), total);
 
+        // TargetId alone is a safe filter: it is a Guid from either table, so it cannot
+        // collide across the two types. The grouping below still keys on the pair.
+        var pageTargetIds = pageTargets.Select(t => t.TargetId).ToList();
+        var reports = await query
+            .Where(r => pageTargetIds.Contains(r.TargetId))
+            .ToListAsync(cancellationToken);
+
+        var groups = reports
+            .GroupBy(r => (r.TargetType, r.TargetId))
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(r => r.ReportedAt).ToList());
+
         // Collect IDs for thread/comment lookups
-        var threadTargetIds = reports
-            .Where(r => r.TargetType == ReportTargetType.Thread)
-            .Select(r => new ThreadId(r.TargetId))
+        var threadTargetIds = groups.Keys
+            .Where(k => k.TargetType == ReportTargetType.Thread)
+            .Select(k => new ThreadId(k.TargetId))
             .ToList();
 
-        var commentTargetIds = reports
-            .Where(r => r.TargetType == ReportTargetType.Comment)
-            .Select(r => new CommentId(r.TargetId))
+        var commentTargetIds = groups.Keys
+            .Where(k => k.TargetType == ReportTargetType.Comment)
+            .Select(k => new CommentId(k.TargetId))
             .ToList();
 
         // Load thread data — two-pass: list then stitch
@@ -99,14 +118,17 @@ internal sealed class ModerationQuery : IModerationQuery
         var threadDict = threadSummaries.ToDictionary(t => t.TargetId);
         var commentDict = commentSummaries.ToDictionary(c => c.TargetId);
 
-        var items = reports.Select(r =>
+        var items = pageTargets.Select(t =>
         {
+            // Newest first inside the group: the representative report is the
+            // most recent one, which is also what the card's timestamp shows.
+            var groupReports = groups[(t.TargetType, t.TargetId)];
+            var r = groupReports[0];
+
             string? targetTitle = null;
             Guid? targetAuthorId = null;
             string? targetAuthorName = null;
-            // For Thread-type reports, the thread is the target itself; for
-            // Comment-type, jump to the parent thread so the moderator lands
-            // in context.
+            // A comment report deep-links to its PARENT thread, so the moderator lands in context.
             Guid? targetThreadId = null;
 
             if (r.TargetType == ReportTargetType.Thread && threadDict.TryGetValue(r.TargetId, out var thread))
@@ -131,6 +153,14 @@ internal sealed class ModerationQuery : IModerationQuery
             if (userDict.TryGetValue(r.ReporterId, out var reporterProj))
                 reporterName = reporterProj.EffectiveName;
 
+            // "reported 3× as advertising" — one reason for the whole group,
+            // so it's the one most people picked. Ties break on the newest.
+            var reason = groupReports
+                .GroupBy(x => x.Reason)
+                .OrderByDescending(g => g.Count())
+                .ThenByDescending(g => g.Max(x => x.ReportedAt))
+                .First().Key;
+
             return new ModerationQueueItemDto(
                 r.Id.Value,
                 r.CommunityId.Value,
@@ -142,9 +172,10 @@ internal sealed class ModerationQuery : IModerationQuery
                 targetAuthorName,
                 r.ReporterId.Value,
                 reporterName,
-                r.Reason,
+                reason,
                 r.Details,
-                r.ReportedAt);
+                r.ReportedAt,
+                groupReports.Count);
         }).ToList();
 
         return new ModerationQueueDto(items, total);
@@ -164,19 +195,38 @@ internal sealed class ModerationQuery : IModerationQuery
             .Where(l => l.CommunityId == community.Id);
 
         var total = await query.CountAsync(cancellationToken);
-        var entries = await query
+        var rows = await query
             .OrderByDescending(l => l.PerformedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(l => new ModerationLogEntryDto(
+            .ToListAsync(cancellationToken);
+
+        // Keyed by the VALUE OBJECT, not its Guid — the column has a value converter, so
+        // EF only translates `Contains` when both sides are the same type.
+        var userIds = rows.Select(l => l.PerformedBy)
+            .Concat(rows.Where(l => l.TargetUserId != null).Select(l => l.TargetUserId!))
+            .Distinct()
+            .ToList();
+        var names = await _db.UserProjections.AsNoTracking()
+            .Where(u => userIds.Contains(u.Id))
+            .ToDictionaryAsync(u => u.Id, u => u.EffectiveName, cancellationToken);
+
+        var entries = rows.Select(l =>
+        {
+            names.TryGetValue(l.PerformedBy, out var by);
+            string? target = null;
+            if (l.TargetUserId != null) names.TryGetValue(l.TargetUserId, out target);
+            return new ModerationLogEntryDto(
                 l.Id.Value,
                 l.CommunityId.Value,
                 l.Action,
                 l.PerformedBy.Value,
                 l.TargetUserId == null ? (Guid?)null : l.TargetUserId.Value,
                 l.TargetContent,
-                l.PerformedAt))
-            .ToListAsync(cancellationToken);
+                l.PerformedAt,
+                by,
+                target);
+        }).ToList();
 
         return new ModerationLogListDto(entries, total);
     }

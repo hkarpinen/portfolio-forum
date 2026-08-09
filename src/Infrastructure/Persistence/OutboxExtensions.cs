@@ -1,58 +1,43 @@
+using System.Linq.Expressions;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Forum.Domain.ValueObjects;
 
 namespace Infrastructure.Persistence;
 
-// Value-object JSON converters so forum domain events serialise to flat Guid
-// values rather than {"value":"..."} objects. The flat shape is what the wire
-// records in Infrastructure.Messaging.Events expect.
-internal sealed class ThreadIdConverter : JsonConverter<ThreadId>
+// Ids serialise FLAT (a bare Guid, not {"value":...}) — that is the shape consumers bind against.
+// Every id in this service wraps a single Guid, so one factory covers them all and a NEW id type is
+// flat from the day it is introduced, rather than needing another hand-written converter.
+internal sealed class StronglyTypedIdConverter : JsonConverterFactory
 {
-    public override ThreadId Read(ref Utf8JsonReader r, Type t, JsonSerializerOptions o) => new(r.GetGuid());
-    public override void Write(Utf8JsonWriter w, ThreadId v, JsonSerializerOptions o) => w.WriteStringValue(v.Value);
-}
+    public override bool CanConvert(Type type) =>
+        type.GetProperty("Value")?.PropertyType == typeof(Guid)
+        && type.GetConstructor([typeof(Guid)]) is not null;
 
-internal sealed class CommentIdConverter : JsonConverter<CommentId>
-{
-    public override CommentId Read(ref Utf8JsonReader r, Type t, JsonSerializerOptions o) => new(r.GetGuid());
-    public override void Write(Utf8JsonWriter w, CommentId v, JsonSerializerOptions o) => w.WriteStringValue(v.Value);
-}
+    public override JsonConverter CreateConverter(Type type, JsonSerializerOptions _) =>
+        (JsonConverter)Activator.CreateInstance(typeof(Inner<>).MakeGenericType(type))!;
 
-internal sealed class CommunityIdConverter : JsonConverter<CommunityId>
-{
-    public override CommunityId Read(ref Utf8JsonReader r, Type t, JsonSerializerOptions o) => new(r.GetGuid());
-    public override void Write(Utf8JsonWriter w, CommunityId v, JsonSerializerOptions o) => w.WriteStringValue(v.Value);
-}
+    private sealed class Inner<T> : JsonConverter<T>
+    {
+        private static readonly Func<Guid, T> Wrap = BuildWrap();
+        private static readonly Func<T, Guid> Unwrap = BuildUnwrap();
 
-internal sealed class ForumUserIdConverter : JsonConverter<UserId>
-{
-    public override UserId Read(ref Utf8JsonReader r, Type t, JsonSerializerOptions o) => new(r.GetGuid());
-    public override void Write(Utf8JsonWriter w, UserId v, JsonSerializerOptions o) => w.WriteStringValue(v.Value);
-}
+        private static Func<Guid, T> BuildWrap()
+        {
+            var g = Expression.Parameter(typeof(Guid));
+            return Expression.Lambda<Func<Guid, T>>(
+                Expression.New(typeof(T).GetConstructor([typeof(Guid)])!, g), g).Compile();
+        }
 
-internal sealed class MembershipIdConverter : JsonConverter<MembershipId>
-{
-    public override MembershipId Read(ref Utf8JsonReader r, Type t, JsonSerializerOptions o) => new(r.GetGuid());
-    public override void Write(Utf8JsonWriter w, MembershipId v, JsonSerializerOptions o) => w.WriteStringValue(v.Value);
-}
+        private static Func<T, Guid> BuildUnwrap()
+        {
+            var id = Expression.Parameter(typeof(T));
+            return Expression.Lambda<Func<T, Guid>>(Expression.Property(id, "Value"), id).Compile();
+        }
 
-internal sealed class BanIdConverter : JsonConverter<BanId>
-{
-    public override BanId Read(ref Utf8JsonReader r, Type t, JsonSerializerOptions o) => new(r.GetGuid());
-    public override void Write(Utf8JsonWriter w, BanId v, JsonSerializerOptions o) => w.WriteStringValue(v.Value);
-}
-
-internal sealed class LogIdConverter : JsonConverter<LogId>
-{
-    public override LogId Read(ref Utf8JsonReader r, Type t, JsonSerializerOptions o) => new(r.GetGuid());
-    public override void Write(Utf8JsonWriter w, LogId v, JsonSerializerOptions o) => w.WriteStringValue(v.Value);
-}
-
-internal sealed class ReportIdConverter : JsonConverter<ReportId>
-{
-    public override ReportId Read(ref Utf8JsonReader r, Type t, JsonSerializerOptions o) => new(r.GetGuid());
-    public override void Write(Utf8JsonWriter w, ReportId v, JsonSerializerOptions o) => w.WriteStringValue(v.Value);
+        public override T Read(ref Utf8JsonReader r, Type t, JsonSerializerOptions o) => Wrap(r.GetGuid());
+        public override void Write(Utf8JsonWriter w, T v, JsonSerializerOptions o) => w.WriteStringValue(Unwrap(v));
+    }
 }
 
 internal static class OutboxExtensions
@@ -63,22 +48,12 @@ internal static class OutboxExtensions
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         Converters =
         {
-            new ThreadIdConverter(),
-            new CommentIdConverter(),
-            new CommunityIdConverter(),
-            new ForumUserIdConverter(),
-            new MembershipIdConverter(),
-            new BanIdConverter(),
-            new LogIdConverter(),
-            new ReportIdConverter()
+            new StronglyTypedIdConverter()
         }
     };
 
-    /// <summary>
-    /// Serialises a domain event and appends it to the outbox_messages table.
-    /// Call this for every domain event before SaveChangesAsync so both writes
-    /// occur in the same transaction.
-    /// </summary>
+    /// <summary>Must be called BEFORE SaveChangesAsync so the event and the state
+    /// change commit together.</summary>
     public static void AddToOutbox(this ForumDbContext context, object domainEvent)
     {
         var message = new OutboxMessage

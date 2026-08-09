@@ -13,21 +13,31 @@ internal sealed class CommentWorkflowManager : ICommentWorkflowManager
     private readonly ICommentRepository _commentRepository;
     private readonly IThreadRepository _threadRepository;
     private readonly ICommunityRepository _communityRepository;
+    private readonly IBanRepository _banRepository;
 
     public CommentWorkflowManager(
         ICommentRepository commentRepository,
         IThreadRepository threadRepository,
-        ICommunityRepository communityRepository)
+        ICommunityRepository communityRepository,
+        IBanRepository banRepository)
     {
         _commentRepository = commentRepository;
         _threadRepository = threadRepository;
         _communityRepository = communityRepository;
+        _banRepository = banRepository;
     }
 
     public async Task<Guid> CreateAsync(CreateCommentCommand command, CancellationToken cancellationToken = default)
     {
         if (SpamDetectionEngine.IsSpam(command.Content, command.AuthorId))
             throw new InvalidOperationException("Content was rejected as spam.");
+
+        // Banned from the community the thread sits in — see the same check on
+        // thread creation. Reading the thread is still allowed; posting isn't.
+        var host = await _threadRepository.GetByIdAsync(new ThreadId(command.ThreadId), cancellationToken);
+        if (host is not null && await _banRepository.IsBannedAsync(
+                host.CommunityId, new UserId(command.AuthorId), cancellationToken))
+            throw new UnauthorizedAccessException("You are banned from this community.");
 
         var comment = Comment.Create(
             new ThreadId(command.ThreadId),

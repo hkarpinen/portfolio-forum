@@ -164,7 +164,9 @@ public class ReportTests
             new FakeBanRepository(),
             new FakeModerationLogRepository(),
             new FakeReportRepository(report),
-            memberships);
+            memberships,
+            new FakeThreadRepository(),
+            new FakeCommentRepository());
 
         return (manager, report, memberships);
     }
@@ -230,6 +232,178 @@ public class ReportTests
         Assert.Equal(ReportStatus.Removed, report.Status);
     }
 
+    // The queue is one row per TARGET, so resolving acts on the whole group — acting on one of
+    // three reports must not leave two Open and put the card straight back on the screen.
+
+    [Fact]
+    public async Task RemoveContent_ClosesEveryOpenReportOnTheSameTarget()
+    {
+        var communityId = new CommunityId(Guid.NewGuid());
+        var targetId = Guid.NewGuid();
+        var reports = Enumerable.Range(0, 3)
+            .Select(_ => Report.Create(
+                communityId, ReportTargetType.Comment, targetId,
+                new UserId(Guid.NewGuid()), "Advertising", null))
+            .ToArray();
+
+        // A report on OTHER content in the same community must be left alone.
+        var unrelated = Report.Create(
+            communityId, ReportTargetType.Comment, Guid.NewGuid(),
+            new UserId(Guid.NewGuid()), "Off topic", null);
+
+        var callerId = Guid.NewGuid();
+        var memberships = new FakeMembershipRepository();
+        memberships.Add(communityId, new UserId(callerId), CommunityRole.Moderator);
+
+        var manager = new ModerationManager(
+            new FakeBanRepository(),
+            new FakeModerationLogRepository(),
+            new FakeReportRepository(reports.Append(unrelated).ToArray()),
+            memberships,
+            new FakeThreadRepository(),
+            new FakeCommentRepository());
+
+        await manager.RemoveContentAsync(new RemoveContentCommand(reports[0].Id.Value, callerId));
+
+        Assert.All(reports, r => Assert.Equal(ReportStatus.Removed, r.Status));
+        Assert.Equal(ReportStatus.Open, unrelated.Status);
+    }
+
+    [Fact]
+    public async Task RemoveContent_SoftDeletesTheReportedThread()
+    {
+        var communityId = new CommunityId(Guid.NewGuid());
+        var thread = ForumThread.Create(
+            communityId, "kitchen", new UserId(Guid.NewGuid()),
+            "Best mattress for a small room?", "…", null);
+
+        var report = Report.Create(
+            communityId, ReportTargetType.Thread, thread.Id.Value,
+            new UserId(Guid.NewGuid()), "Off topic", null);
+
+        var callerId = Guid.NewGuid();
+        var memberships = new FakeMembershipRepository();
+        memberships.Add(communityId, new UserId(callerId), CommunityRole.Moderator);
+
+        var manager = new ModerationManager(
+            new FakeBanRepository(),
+            new FakeModerationLogRepository(),
+            new FakeReportRepository(report),
+            memberships,
+            new FakeThreadRepository(thread),
+            new FakeCommentRepository());
+
+        await manager.RemoveContentAsync(new RemoveContentCommand(report.Id.Value, callerId));
+
+        // The point of the button: the content leaves the page, not just the queue.
+        Assert.NotNull(thread.DeletedAt);
+        Assert.Equal(ReportStatus.Removed, report.Status);
+    }
+
+    [Fact]
+    public async Task RemoveContent_SoftDeletesTheReportedComment()
+    {
+        var communityId = new CommunityId(Guid.NewGuid());
+        var comment = Comment.Create(
+            new ThreadId(Guid.NewGuid()), new UserId(Guid.NewGuid()),
+            "Sharpening service, link in bio", null);
+
+        var report = Report.Create(
+            communityId, ReportTargetType.Comment, comment.Id.Value,
+            new UserId(Guid.NewGuid()), "Advertising", null);
+
+        var callerId = Guid.NewGuid();
+        var memberships = new FakeMembershipRepository();
+        memberships.Add(communityId, new UserId(callerId), CommunityRole.Moderator);
+
+        var manager = new ModerationManager(
+            new FakeBanRepository(),
+            new FakeModerationLogRepository(),
+            new FakeReportRepository(report),
+            memberships,
+            new FakeThreadRepository(),
+            new FakeCommentRepository(comment));
+
+        await manager.RemoveContentAsync(new RemoveContentCommand(report.Id.Value, callerId));
+
+        Assert.NotNull(comment.DeletedAt);
+        Assert.Equal(ReportStatus.Removed, report.Status);
+    }
+
+    [Fact]
+    public async Task RemoveContent_LogsTheGroupsDominantReason_NotTheNewestReports()
+    {
+        var communityId = new CommunityId(Guid.NewGuid());
+        var comment = Comment.Create(
+            new ThreadId(Guid.NewGuid()), new UserId(Guid.NewGuid()), "link in bio", null);
+
+        // Two people said advertising, one said off topic. `Report.Create`
+        // stamps ReportedAt itself, so creation order is chronological and the
+        // off-topic one is the NEWEST — the report the queue names. The card
+        // the moderator clicked said "Advertising", so that is what the public
+        // log has to say too.
+        var reports = new[]
+        {
+            MakeReport(communityId, comment.Id.Value, "Advertising"),
+            MakeReport(communityId, comment.Id.Value, "Advertising"),
+            MakeReport(communityId, comment.Id.Value, "Off topic"),
+        };
+
+        var callerId = Guid.NewGuid();
+        var memberships = new FakeMembershipRepository();
+        memberships.Add(communityId, new UserId(callerId), CommunityRole.Moderator);
+        var logs = new FakeModerationLogRepository();
+
+        var manager = new ModerationManager(
+            new FakeBanRepository(),
+            logs,
+            new FakeReportRepository(reports),
+            memberships,
+            new FakeThreadRepository(),
+            new FakeCommentRepository(comment));
+
+        await manager.RemoveContentAsync(new RemoveContentCommand(reports[2].Id.Value, callerId));
+
+        var entry = Assert.Single(logs.Entries);
+        Assert.Equal(ModerationAction.DeleteComment, entry.Action);
+        Assert.Equal("Advertising", entry.TargetContent);
+    }
+
+    private static Report MakeReport(CommunityId communityId, Guid targetId, string reason)
+        => Report.Create(
+            communityId, ReportTargetType.Comment, targetId,
+            new UserId(Guid.NewGuid()), reason, null);
+
+    [Fact]
+    public async Task DismissReport_ClosesEveryOpenReportOnTheSameTarget()
+    {
+        var communityId = new CommunityId(Guid.NewGuid());
+        var targetId = Guid.NewGuid();
+        var first = Report.Create(
+            communityId, ReportTargetType.Thread, targetId,
+            new UserId(Guid.NewGuid()), "Off topic", null);
+        var second = Report.Create(
+            communityId, ReportTargetType.Thread, targetId,
+            new UserId(Guid.NewGuid()), "Off topic", null);
+
+        var callerId = Guid.NewGuid();
+        var memberships = new FakeMembershipRepository();
+        memberships.Add(communityId, new UserId(callerId), CommunityRole.Owner);
+
+        var manager = new ModerationManager(
+            new FakeBanRepository(),
+            new FakeModerationLogRepository(),
+            new FakeReportRepository(first, second),
+            memberships,
+            new FakeThreadRepository(),
+            new FakeCommentRepository());
+
+        await manager.DismissReportAsync(new DismissReportCommand(first.Id.Value, callerId));
+
+        Assert.Equal(ReportStatus.Dismissed, first.Status);
+        Assert.Equal(ReportStatus.Dismissed, second.Status);
+    }
+
     // --- Hand-rolled in-memory fakes (test project has no mocking library). ---
 
     private sealed class FakeReportRepository : IReportRepository
@@ -241,11 +415,57 @@ public class ReportTests
         }
         public Task<Report?> GetByIdAsync(ReportId id, CancellationToken cancellationToken = default)
             => Task.FromResult(_reports.GetValueOrDefault(id));
+        public Task<IReadOnlyList<Report>> ListOpenByTargetAsync(
+            CommunityId communityId, ReportTargetType targetType, Guid targetId, CancellationToken cancellationToken = default)
+            => Task.FromResult<IReadOnlyList<Report>>(_reports.Values
+                .Where(r => r.CommunityId == communityId
+                    && r.TargetType == targetType
+                    && r.TargetId == targetId
+                    && r.Status == ReportStatus.Open)
+                .ToList());
         public Task AddAsync(Report report, CancellationToken cancellationToken = default)
         {
             _reports[report.Id] = report;
             return Task.CompletedTask;
         }
+        public Task CommitAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
+    private sealed class FakeThreadRepository : IThreadRepository
+    {
+        private readonly Dictionary<ThreadId, ForumThread> _threads = new();
+        public FakeThreadRepository(params ForumThread[] seed)
+        {
+            foreach (var t in seed) _threads[t.Id] = t;
+        }
+        public Task<ForumThread?> GetByIdAsync(ThreadId id, CancellationToken cancellationToken = default)
+            => Task.FromResult(_threads.GetValueOrDefault(id));
+        public Task AddAsync(ForumThread thread, CancellationToken cancellationToken = default)
+        {
+            _threads[thread.Id] = thread;
+            return Task.CompletedTask;
+        }
+        public Task UpdateAsync(ForumThread thread, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task DeleteAsync(ThreadId id, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task CommitAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+    }
+
+    private sealed class FakeCommentRepository : ICommentRepository
+    {
+        private readonly Dictionary<CommentId, Comment> _comments = new();
+        public FakeCommentRepository(params Comment[] seed)
+        {
+            foreach (var c in seed) _comments[c.Id] = c;
+        }
+        public Task<Comment?> GetByIdAsync(CommentId id, CancellationToken cancellationToken = default)
+            => Task.FromResult(_comments.GetValueOrDefault(id));
+        public Task AddAsync(Comment comment, CancellationToken cancellationToken = default)
+        {
+            _comments[comment.Id] = comment;
+            return Task.CompletedTask;
+        }
+        public Task UpdateAsync(Comment comment, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task DeleteAsync(CommentId id, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task CommitAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
@@ -270,9 +490,14 @@ public class ReportTests
 
     private sealed class FakeModerationLogRepository : IModerationLogRepository
     {
+        public List<ModerationLog> Entries { get; } = new();
         public Task<ModerationLog?> GetByIdAsync(LogId id, CancellationToken cancellationToken = default)
             => Task.FromResult<ModerationLog?>(null);
-        public Task AddAsync(ModerationLog log, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task AddAsync(ModerationLog log, CancellationToken cancellationToken = default)
+        {
+            Entries.Add(log);
+            return Task.CompletedTask;
+        }
         public Task CommitAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 
@@ -280,6 +505,8 @@ public class ReportTests
     {
         public Task<CommunityBan?> GetByIdAsync(BanId id, CancellationToken cancellationToken = default)
             => Task.FromResult<CommunityBan?>(null);
+        public Task<bool> IsBannedAsync(CommunityId communityId, UserId userId, CancellationToken cancellationToken = default)
+            => Task.FromResult(false);
         public Task AddAsync(CommunityBan ban, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task RemoveAsync(CommunityBan ban, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task CommitAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;

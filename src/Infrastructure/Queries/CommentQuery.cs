@@ -30,13 +30,30 @@ internal sealed class CommentQuery : ICommentQuery
             .ToListAsync(cancellationToken);
         var projDict = projections.ToDictionary(p => p.Id);
 
+        // The caller's own vote per comment, carrying the VoteId that switch and retract
+        // are keyed by.
+        var myVotes = new Dictionary<Guid, MyVoteDto>();
+        if (request.CallerId is { } callerId)
+        {
+            var commentIds = comments.Select(c => c.Id.Value).ToList();
+            var voterId = new UserId(callerId);
+            var votes = await _db.Votes.AsNoTracking()
+                .Where(v => v.UserId == voterId
+                            && v.TargetType == VoteTargetType.Comment
+                            && commentIds.Contains(v.TargetId))
+                .ToListAsync(cancellationToken);
+            foreach (var v in votes)
+                myVotes[v.TargetId] = new MyVoteDto(v.Id.Value, (int)v.Direction);
+        }
+
         // Build a mutable node map keyed by CommentId — VoteScore read from column, no votes aggregation
         var nodeMap = comments.ToDictionary(
             c => c.Id.Value,
             c =>
             {
                 projDict.TryGetValue(c.AuthorId, out var proj);
-                return (response: CommentMapper.ToDto(c, proj?.EffectiveName, proj?.AvatarUrl, c.VoteScore), children: new List<CommentTreeNodeDto>());
+                myVotes.TryGetValue(c.Id.Value, out var mine);
+                return (response: CommentMapper.ToDto(c, proj?.EffectiveName, proj?.AvatarUrl, c.VoteScore, mine), children: new List<CommentTreeNodeDto>());
             });
 
         // Wire children into their parents; collect root-level comments
