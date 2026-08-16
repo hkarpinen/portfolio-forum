@@ -4,11 +4,6 @@ namespace Client.Extensions;
 
 public static class ClaimsPrincipalExtensions
 {
-    // "Demo" must be listed: it is a real signed-in role, and omitting it 403s every
-    // write for demo sessions. Admin is deliberately not a member role.
-    private static readonly string[] MemberRoles = { "Member", "Moderator", "Owner", "Admin", "Demo" };
-    private static readonly string[] AdminRoles  = { "Admin" };
-
     public static Guid GetRequiredUserId(this ClaimsPrincipal principal)
     {
         var raw = principal.FindFirstValue("sub")
@@ -33,18 +28,18 @@ public static class ClaimsPrincipalExtensions
         return Guid.TryParse(raw, out var userId) ? userId : null;
     }
 
-    public static string GetRequiredRole(this ClaimsPrincipal principal) =>
-        GetRole(principal) ?? throw new InvalidOperationException("Missing role claim.");
+    /// <summary>
+    /// Asks the only question forum actually had: is there a signed-in person behind this request.
+    ///
+    /// This used to allow-list identity's role names — "Member", "Moderator", "Owner", "Admin",
+    /// "Demo" — two of which identity has never issued, and one of which was missing long enough
+    /// to 403 every write from a demo session. Forum does not own that vocabulary and has no
+    /// business tracking it. What forum owns is <c>CommunityMembership.Role</c>, and that is where
+    /// every real forum permission is decided.
+    /// </summary>
+    public static bool IsMemberOrAbove(this ClaimsPrincipal principal) =>
+        principal.GetUserIdOrNull() is not null;
 
-    public static bool IsMemberOrAbove(this ClaimsPrincipal principal) => HasAnyRole(principal, MemberRoles);
-    public static bool IsAdmin(this ClaimsPrincipal principal) => HasAnyRole(principal, AdminRoles);
-
-    private static string? GetRole(ClaimsPrincipal principal) =>
-        principal.FindFirstValue(ClaimTypes.Role) ?? principal.FindFirstValue("role");
-
-    private static bool HasAnyRole(ClaimsPrincipal principal, string[] roles)
-    {
-        var role = GetRole(principal);
-        return role is not null && roles.Any(r => r.Equals(role, StringComparison.OrdinalIgnoreCase));
-    }
+    /// <summary>Platform administration, which is identity's fact about the account, not forum's.</summary>
+    public static bool IsAdmin(this ClaimsPrincipal principal) => principal.HasClaim("admin", "true");
 }
