@@ -35,9 +35,12 @@ internal sealed class MembershipQuery : IMembershipQuery
             .OrderBy(m => m.JoinedAt)
             .ToListAsync(cancellationToken);
 
-        var userIds = memberships.Select(m => m.UserId.Value).ToHashSet();
+        // Compared as the strongly-typed id, not `.Value`. EF translates the value conversion on
+        // the id itself; unwrapping it first compiles and then throws at runtime, which is a 500 on
+        // every screen that shows a member's name.
+        var userIds = memberships.Select(m => m.UserId).ToHashSet();
         var projections = await _db.UserProjections
-            .Where(p => userIds.Contains(p.Id.Value))
+            .Where(p => userIds.Contains(p.Id))
             .ToListAsync(cancellationToken);
         var profileMap = projections.ToDictionary(p => p.Id.Value);
 
@@ -61,9 +64,9 @@ internal sealed class MembershipQuery : IMembershipQuery
             .OrderBy(m => m.JoinedAt)
             .ToListAsync(cancellationToken);
 
-        var communityIds = memberships.Select(m => m.CommunityId.Value).ToHashSet();
+        var communityIds = memberships.Select(m => m.CommunityId).ToHashSet();
         var communities = await _db.Communities
-            .Where(c => communityIds.Contains(c.Id.Value))
+            .Where(c => communityIds.Contains(c.Id))
             .ToListAsync(cancellationToken);
         var communityMap = communities.ToDictionary(c => c.Id.Value);
 
