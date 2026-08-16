@@ -93,23 +93,26 @@ try
     {
         options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
+        // Limits are configuration, not constants. The defaults below are the production posture;
+        // a parallel e2e run drives far more traffic per minute than any real user. Override per
+        // environment with RateLimiting__<policy>.
         options.AddFixedWindowLimiter("standard", limiterOptions =>
         {
-            limiterOptions.PermitLimit = 120;
+            limiterOptions.PermitLimit = builder.Configuration.GetValue<int?>("RateLimiting:standard") ?? 120;
             limiterOptions.Window = TimeSpan.FromMinutes(1);
             limiterOptions.QueueLimit = 0;
         });
 
         options.AddFixedWindowLimiter("write", limiterOptions =>
         {
-            limiterOptions.PermitLimit = 30;
+            limiterOptions.PermitLimit = builder.Configuration.GetValue<int?>("RateLimiting:write") ?? 30;
             limiterOptions.Window = TimeSpan.FromMinutes(1);
             limiterOptions.QueueLimit = 0;
         });
 
         options.AddFixedWindowLimiter("search", limiterOptions =>
         {
-            limiterOptions.PermitLimit = 20;
+            limiterOptions.PermitLimit = builder.Configuration.GetValue<int?>("RateLimiting:search") ?? 20;
             limiterOptions.Window = TimeSpan.FromMinutes(1);
             limiterOptions.QueueLimit = 0;
         });

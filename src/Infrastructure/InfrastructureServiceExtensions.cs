@@ -19,20 +19,37 @@ public static class InfrastructureServiceExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        services.AddDbContext<ForumDbContext>(options =>
+        services.AddScoped<DomainEventPublishingInterceptor>();
+        services.AddDbContext<ForumDbContext>((sp, options) =>
             options.UseNpgsql(
                     configuration.GetConnectionString("Forum"),
                     npgsql => npgsql.MigrationsAssembly("Infrastructure"))
-                .UseSnakeCaseNamingConvention());
+                .UseSnakeCaseNamingConvention()
+                .AddInterceptors(sp.GetRequiredService<DomainEventPublishingInterceptor>()));
 
         var rabbitConfig = configuration.GetSection("RabbitMq");
         services.AddMassTransit(x =>
         {
             x.SetEndpointNameFormatter(new KebabCaseEndpointNameFormatter("forum", false));
 
+            // Replaces the hand-rolled outbox table and its polling BackgroundService. UseBusOutbox
+            // routes a Publish made during SaveChanges into the outbox rather than the broker, so
+            // the event commits with the aggregate and the delivery service sends it.
+            x.AddEntityFrameworkOutbox<ForumDbContext>(o =>
+            {
+                o.UsePostgres();
+                o.UseBusOutbox();
+            });
+
+            // Turns the inbox ON for every receive endpoint. AddEntityFrameworkOutbox alone sets up
+            // the tables and the send side only — without this the consumers have no dedup at all.
+            x.AddConfigureEndpointsCallback((context, _, cfg) =>
+                cfg.UseEntityFrameworkOutbox<ForumDbContext>(context));
+
             x.AddConsumer<UserRegisteredConsumer>();
             x.AddConsumer<UserProfileUpdatedConsumer>();
             x.AddConsumer<UserBannedConsumer>();
+            x.AddConsumer<DemoUserCreatedConsumer>();
 
             x.UsingRabbitMq((context, cfg) =>
             {
@@ -77,7 +94,6 @@ public static class InfrastructureServiceExtensions
 
         services.AddSingleton<IMediaStore, LocalFileSystemMediaStore>();
 
-        services.AddHostedService<OutboxPublisher>();
 
         return services;
     }

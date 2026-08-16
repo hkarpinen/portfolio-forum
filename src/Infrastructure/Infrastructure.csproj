@@ -8,8 +8,9 @@
 
   <ItemGroup>
     <PackageReference Include="EFCore.NamingConventions" Version="8.*" />
-    <PackageReference Include="MassTransit" Version="8.*" />
-    <PackageReference Include="MassTransit.RabbitMQ" Version="8.*" />
+    <PackageReference Include="MassTransit" Version="8.4.0" />
+    <PackageReference Include="MassTransit.EntityFrameworkCore" Version="8.4.0" />
+    <PackageReference Include="MassTransit.RabbitMQ" Version="8.4.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.*" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="8.*" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.*" />
@@ -21,4 +22,12 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+
+  <!-- Matches Application and Domain: the integration-event translation is internal, and it is
+       exactly the thing that must be tested, because getting it wrong fails silently. -->
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
 </Project>

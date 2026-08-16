@@ -24,8 +24,6 @@ internal sealed class UserRegisteredConsumer : IConsumer<UserRegistered>
     public async Task Consume(ConsumeContext<UserRegistered> context)
     {
         var message = context.Message;
-        if (await IsProcessedAsync(message.Id, context.CancellationToken))
-            return;
 
         var userId = new UserId(message.UserId);
         var existing = await _dbContext.UserProjections
@@ -56,20 +54,8 @@ internal sealed class UserRegisteredConsumer : IConsumer<UserRegistered>
         {
             _dbContext.Entry(existing).CurrentValues.SetValues(projection);
         }
-
-        _dbContext.ProcessedEvents.Add(new ProcessedEvent(message.Id, nameof(UserRegistered), DateTime.UtcNow));
-        try
-        {
-            await _dbContext.SaveChangesAsync(context.CancellationToken);
-        }
-        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
-        {
-            // duplicate delivery handled by unique key on processed_events.event_id
-        }
+        await _dbContext.SaveChangesAsync(context.CancellationToken);
     }
-
-    private Task<bool> IsProcessedAsync(Guid eventId, CancellationToken cancellationToken)
-        => _dbContext.ProcessedEvents.AnyAsync(x => x.EventId == eventId, cancellationToken);
 
     private static string BuildUserName(string? email, string? displayName, Guid userId)
     {

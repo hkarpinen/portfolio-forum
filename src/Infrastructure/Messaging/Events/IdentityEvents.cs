@@ -21,3 +21,14 @@ public sealed record UserBanned(
     DateTime OccurredAt,
     Guid UserId,
     DateTime BannedAt);
+
+// Identity raises this INSTEAD of UserRegistered for a demo account. Forum consumed only
+// UserRegistered, so a demo user never got a projection row here and every thread they wrote
+// rendered its author as "someone" — while finance and household, which do consume it, were fine.
+public sealed record DemoUserCreated(
+    Guid Id,
+    DateTime OccurredAt,
+    Guid UserId,
+    string Email,
+    string DisplayName,
+    DateTime DemoExpiresAt);
