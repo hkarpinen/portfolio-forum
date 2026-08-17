@@ -29,13 +29,8 @@ public static class ClaimsPrincipalExtensions
     }
 
     /// <summary>
-    /// Asks the only question forum actually had: is there a signed-in person behind this request.
-    ///
-    /// This used to allow-list identity's role names — "Member", "Moderator", "Owner", "Admin",
-    /// "Demo" — two of which identity has never issued, and one of which was missing long enough
-    /// to 403 every write from a demo session. Forum does not own that vocabulary and has no
-    /// business tracking it. What forum owns is <c>CommunityMembership.Role</c>, and that is where
-    /// every real forum permission is decided.
+    /// Is there a signed-in person behind this request. Forum's own permissions live on
+    /// <see cref="Domain.Aggregates.CommunityMembership"/>, not in a token claim.
     /// </summary>
     public static bool IsMemberOrAbove(this ClaimsPrincipal principal) =>
         principal.GetUserIdOrNull() is not null;
