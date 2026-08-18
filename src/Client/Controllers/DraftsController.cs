@@ -13,7 +13,6 @@ namespace Client.Controllers;
 [ApiController]
 [Route("api/forum/drafts")]
 [Authorize]
-[EnableRateLimiting("standard")]
 public sealed class DraftsController : ControllerBase
 {
     private readonly IThreadWorkflowManager _threads;
@@ -35,7 +34,6 @@ public sealed class DraftsController : ControllerBase
         => Ok(await _query.ListDraftsByAuthorAsync(User.GetRequiredUserId(), ct));
 
     [HttpPost]
-    [EnableRateLimiting("write")]
     public async Task<IActionResult> Begin([FromBody] BeginDraftCommand request, CancellationToken ct)
     {
         var community = await _communities.GetBySlugAsync(
@@ -56,7 +54,6 @@ public sealed class DraftsController : ControllerBase
     }
 
     [HttpPut("{draftId:guid}")]
-    [EnableRateLimiting("write")]
     public async Task<IActionResult> Revise([FromRoute] Guid draftId, [FromBody] ReviseDraftCommand request, CancellationToken ct)
     {
         var result = await _threads.ReviseDraftAsync(
@@ -65,7 +62,6 @@ public sealed class DraftsController : ControllerBase
     }
 
     [HttpPost("{draftId:guid}/publish")]
-    [EnableRateLimiting("write")]
     public async Task<IActionResult> Publish([FromRoute] Guid draftId, CancellationToken ct)
     {
         var result = await _threads.PublishDraftAsync(
@@ -74,7 +70,6 @@ public sealed class DraftsController : ControllerBase
     }
 
     [HttpDelete("{draftId:guid}")]
-    [EnableRateLimiting("write")]
     public async Task<IActionResult> Abandon([FromRoute] Guid draftId, CancellationToken ct)
     {
         var ok = await _threads.AbandonDraftAsync(

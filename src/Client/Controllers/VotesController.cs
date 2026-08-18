@@ -10,7 +10,6 @@ namespace Client.Controllers;
 
 [ApiController]
 [Route("api/forum/votes")]
-[EnableRateLimiting("standard")]
 public sealed class VotesController : ControllerBase
 {
     private readonly IVoteManager _voteManager;
@@ -22,7 +21,6 @@ public sealed class VotesController : ControllerBase
 
     [HttpPost]
     [Authorize(Policy = ForumAuthorizationPolicies.MemberOrAbove)]
-    [EnableRateLimiting("write")]
     public async Task<IActionResult> Cast([FromBody] CastVoteCommand request, CancellationToken cancellationToken)
     {
         var result = await _voteManager.CastAsync(
@@ -34,7 +32,6 @@ public sealed class VotesController : ControllerBase
 
     [HttpPut("{voteId:guid}")]
     [Authorize(Policy = ForumAuthorizationPolicies.MemberOrAbove)]
-    [EnableRateLimiting("write")]
     public async Task<IActionResult> Switch([FromRoute] Guid voteId, [FromBody] SwitchVoteCommand request,
         CancellationToken cancellationToken)
     {
@@ -44,7 +41,6 @@ public sealed class VotesController : ControllerBase
 
     [HttpDelete("{voteId:guid}")]
     [Authorize(Policy = ForumAuthorizationPolicies.MemberOrAbove)]
-    [EnableRateLimiting("write")]
     public async Task<IActionResult> Retract([FromRoute] Guid voteId, CancellationToken cancellationToken)
     {
         var result = await _voteManager.RetractAsync(new RetractVoteCommand(voteId), cancellationToken);

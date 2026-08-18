@@ -11,7 +11,6 @@ namespace Client.Controllers;
 
 [ApiController]
 [Route("api/forum/threads")]
-[EnableRateLimiting("standard")]
 public sealed class ThreadsController : ControllerBase
 {
     private readonly IThreadWorkflowManager _threadWorkflowManager;
@@ -30,7 +29,6 @@ public sealed class ThreadsController : ControllerBase
 
     [HttpPost]
     [Authorize(Policy = ForumAuthorizationPolicies.MemberOrAbove)]
-    [EnableRateLimiting("write")]
     public async Task<IActionResult> Create([FromBody] CreateThreadCommand request,
         CancellationToken cancellationToken)
     {
@@ -77,7 +75,6 @@ public sealed class ThreadsController : ControllerBase
 
     [HttpPut("{id:guid}")]
     [Authorize(Policy = ForumAuthorizationPolicies.MemberOrAbove)]
-    [EnableRateLimiting("write")]
     public async Task<IActionResult> Edit([FromRoute] Guid id, [FromBody] EditThreadCommand request,
         CancellationToken cancellationToken)
     {
@@ -87,7 +84,6 @@ public sealed class ThreadsController : ControllerBase
 
     [HttpDelete("{id:guid}")]
     [Authorize(Policy = ForumAuthorizationPolicies.MemberOrAbove)]
-    [EnableRateLimiting("write")]
     public async Task<IActionResult> Delete([FromRoute] Guid id, CancellationToken cancellationToken)
     {
         try
@@ -104,7 +100,6 @@ public sealed class ThreadsController : ControllerBase
 
     [HttpPost("{id:guid}/lock")]
     [Authorize(Policy = ForumAuthorizationPolicies.MemberOrAbove)]
-    [EnableRateLimiting("write")]
     public async Task<IActionResult> Lock([FromRoute] Guid id, CancellationToken cancellationToken)
     {
         try
@@ -121,7 +116,6 @@ public sealed class ThreadsController : ControllerBase
 
     [HttpPost("{id:guid}/pin")]
     [Authorize(Policy = ForumAuthorizationPolicies.MemberOrAbove)]
-    [EnableRateLimiting("write")]
     public async Task<IActionResult> Pin([FromRoute] Guid id, CancellationToken cancellationToken)
     {
         try
@@ -138,7 +132,6 @@ public sealed class ThreadsController : ControllerBase
 
     [HttpGet("/api/forum/search")]
     [AllowAnonymous]
-    [EnableRateLimiting("search")]
     public async Task<IActionResult> Search([FromQuery] SearchQueryCommand request, CancellationToken cancellationToken)
     {
         var result = await _threadQuery.SearchAsync(request, cancellationToken);

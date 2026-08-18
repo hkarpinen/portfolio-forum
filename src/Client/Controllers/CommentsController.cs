@@ -11,7 +11,6 @@ namespace Client.Controllers;
 
 [ApiController]
 [Route("api/forum/comments")]
-[EnableRateLimiting("standard")]
 public sealed class CommentsController : ControllerBase
 {
     private readonly ICommentWorkflowManager _commentWorkflowManager;
@@ -25,7 +24,6 @@ public sealed class CommentsController : ControllerBase
 
     [HttpPost]
     [Authorize(Policy = ForumAuthorizationPolicies.MemberOrAbove)]
-    [EnableRateLimiting("write")]
     public async Task<IActionResult> Create([FromBody] CreateCommentCommand request,
         CancellationToken cancellationToken)
     {
@@ -38,7 +36,6 @@ public sealed class CommentsController : ControllerBase
 
     [HttpPut("{commentId:guid}")]
     [Authorize(Policy = ForumAuthorizationPolicies.MemberOrAbove)]
-    [EnableRateLimiting("write")]
     public async Task<IActionResult> Edit([FromRoute] Guid commentId, [FromBody] EditCommentCommand request,
         CancellationToken cancellationToken)
     {
@@ -48,7 +45,6 @@ public sealed class CommentsController : ControllerBase
 
     [HttpDelete("{commentId:guid}")]
     [Authorize(Policy = ForumAuthorizationPolicies.MemberOrAbove)]
-    [EnableRateLimiting("write")]
     public async Task<IActionResult> Delete([FromRoute] Guid commentId, CancellationToken cancellationToken)
     {
         var found = await _commentWorkflowManager.DeleteAsync(new DeleteCommentCommand(commentId), cancellationToken);

@@ -8,7 +8,6 @@ using Infrastructure;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
 using Serilog;
@@ -82,34 +81,6 @@ try
             policy.RequireAssertion(context => context.User.IsAdmin()));
     });
 
-    builder.Services.AddRateLimiter(options =>
-    {
-        options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
-
-        // Limits are configuration, not constants. The defaults below are the production posture;
-        // a parallel e2e run drives far more traffic per minute than any real user. Override per
-        // environment with RateLimiting__<policy>.
-        options.AddFixedWindowLimiter("standard", limiterOptions =>
-        {
-            limiterOptions.PermitLimit = builder.Configuration.GetValue<int?>("RateLimiting:standard") ?? 120;
-            limiterOptions.Window = TimeSpan.FromMinutes(1);
-            limiterOptions.QueueLimit = 0;
-        });
-
-        options.AddFixedWindowLimiter("write", limiterOptions =>
-        {
-            limiterOptions.PermitLimit = builder.Configuration.GetValue<int?>("RateLimiting:write") ?? 30;
-            limiterOptions.Window = TimeSpan.FromMinutes(1);
-            limiterOptions.QueueLimit = 0;
-        });
-
-        options.AddFixedWindowLimiter("search", limiterOptions =>
-        {
-            limiterOptions.PermitLimit = builder.Configuration.GetValue<int?>("RateLimiting:search") ?? 20;
-            limiterOptions.Window = TimeSpan.FromMinutes(1);
-            limiterOptions.QueueLimit = 0;
-        });
-    });
 
     builder.Services.AddControllers()
         .AddJsonOptions(o =>
@@ -138,7 +109,6 @@ try
     app.UseStatusCodePages();
 
     app.UseSerilogRequestLogging();
-    app.UseRateLimiter();
     app.UseAuthentication();
     app.UseAuthorization();
 

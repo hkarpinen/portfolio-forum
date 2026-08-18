@@ -12,7 +12,6 @@ namespace Client.Controllers;
 
 [ApiController]
 [Route("api/forum/profiles")]
-[EnableRateLimiting("standard")]
 public sealed class ForumProfilesController : ControllerBase
 {
     private readonly IForumProfileManager _profileManager;

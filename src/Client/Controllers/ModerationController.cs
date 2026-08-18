@@ -12,7 +12,6 @@ namespace Client.Controllers;
 
 [ApiController]
 [Route("api/forum/moderation")]
-[EnableRateLimiting("standard")]
 [Authorize(Policy = ForumAuthorizationPolicies.MemberOrAbove)]
 public sealed class ModerationController : ControllerBase
 {
@@ -56,7 +55,6 @@ public sealed class ModerationController : ControllerBase
     }
 
     [HttpPost("bans")]
-    [EnableRateLimiting("write")]
     public async Task<IActionResult> Ban([FromBody] BanUserCommand request, CancellationToken cancellationToken)
     {
         var result = await _moderationManager.BanAsync(
@@ -67,7 +65,6 @@ public sealed class ModerationController : ControllerBase
     }
 
     [HttpDelete("bans/{banId:guid}")]
-    [EnableRateLimiting("write")]
     public async Task<IActionResult> Unban([FromRoute] Guid banId, CancellationToken cancellationToken)
     {
         var result = await _moderationManager.UnbanAsync(
@@ -78,7 +75,6 @@ public sealed class ModerationController : ControllerBase
     }
 
     [HttpPost("logs")]
-    [EnableRateLimiting("write")]
     public async Task<IActionResult> LogAction([FromBody] LogModerationActionCommand request,
         CancellationToken cancellationToken)
     {
@@ -132,7 +128,6 @@ public sealed class ModerationController : ControllerBase
     }
 
     [HttpPost("/api/forum/threads/{threadId:guid}/report")]
-    [EnableRateLimiting("write")]
     public async Task<IActionResult> ReportThread(
         [FromRoute] Guid threadId,
         [FromBody] ReportContentRequest body,
@@ -156,7 +151,6 @@ public sealed class ModerationController : ControllerBase
     }
 
     [HttpPost("/api/forum/comments/{commentId:guid}/report")]
-    [EnableRateLimiting("write")]
     public async Task<IActionResult> ReportComment(
         [FromRoute] Guid commentId,
         [FromBody] ReportContentRequest body,
@@ -181,7 +175,6 @@ public sealed class ModerationController : ControllerBase
 
     /// <summary>Approve a report (no content removal — acknowledge and close).</summary>
     [HttpPost("/api/forum/communities/{slug}/mod-queue/{reportId:guid}/approve")]
-    [EnableRateLimiting("write")]
     public async Task<IActionResult> ApproveReport(
         [FromRoute] string slug,
         [FromRoute] Guid reportId,
@@ -201,7 +194,6 @@ public sealed class ModerationController : ControllerBase
     }
 
     [HttpPost("/api/forum/communities/{slug}/mod-queue/{reportId:guid}/remove")]
-    [EnableRateLimiting("write")]
     public async Task<IActionResult> RemoveContent(
         [FromRoute] string slug,
         [FromRoute] Guid reportId,
@@ -221,7 +213,6 @@ public sealed class ModerationController : ControllerBase
     }
 
     [HttpPost("/api/forum/communities/{slug}/mod-queue/{reportId:guid}/dismiss")]
-    [EnableRateLimiting("write")]
     public async Task<IActionResult> DismissReport(
         [FromRoute] string slug,
         [FromRoute] Guid reportId,

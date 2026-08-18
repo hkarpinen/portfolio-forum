@@ -8,7 +8,6 @@ namespace Client.Controllers;
 
 [ApiController]
 [Route("api/forum/media")]
-[EnableRateLimiting("standard")]
 public sealed class MediaController : ControllerBase
 {
     private static readonly HashSet<string> AllowedTypes = new(StringComparer.OrdinalIgnoreCase)
@@ -45,7 +44,6 @@ public sealed class MediaController : ControllerBase
 
     [HttpPost("image")]
     [Authorize(Policy = ForumAuthorizationPolicies.MemberOrAbove)]
-    [EnableRateLimiting("write")]
     public async Task<IActionResult> UploadImage(IFormFile file, CancellationToken cancellationToken)
     {
         if (file is null || file.Length == 0)

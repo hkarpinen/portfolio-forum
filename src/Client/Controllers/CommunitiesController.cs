@@ -12,7 +12,6 @@ namespace Client.Controllers;
 
 [ApiController]
 [Route("api/forum/communities")]
-[EnableRateLimiting("standard")]
 public sealed class CommunitiesController : ControllerBase
 {
     private readonly ICommunityWorkflowManager _communityWorkflowManager;
@@ -34,7 +33,6 @@ public sealed class CommunitiesController : ControllerBase
 
     [HttpPost]
     [Authorize(Policy = ForumAuthorizationPolicies.MemberOrAbove)]
-    [EnableRateLimiting("write")]
     public async Task<IActionResult> Create([FromBody] CreateCommunityCommand request,
         CancellationToken cancellationToken)
     {
@@ -87,7 +85,6 @@ public sealed class CommunitiesController : ControllerBase
 
     [HttpPut("{communityId:guid}")]
     [Authorize(Policy = ForumAuthorizationPolicies.MemberOrAbove)]
-    [EnableRateLimiting("write")]
     public async Task<IActionResult> Update([FromRoute] Guid communityId, [FromBody] UpdateCommunityCommand request,
         CancellationToken cancellationToken)
     {
@@ -120,7 +117,6 @@ public sealed class CommunitiesController : ControllerBase
 
     [HttpPost("{communityId:guid}/join")]
     [Authorize(Policy = ForumAuthorizationPolicies.MemberOrAbove)]
-    [EnableRateLimiting("write")]
     public async Task<IActionResult> Join([FromRoute] Guid communityId, CancellationToken cancellationToken)
     {
         var result = await _membershipManager.JoinAsync(
@@ -132,7 +128,6 @@ public sealed class CommunitiesController : ControllerBase
 
     [HttpPost("{communityId:guid}/ownership")]
     [Authorize(Policy = ForumAuthorizationPolicies.AdminOnly)]
-    [EnableRateLimiting("write")]
     public async Task<IActionResult> TransferOwnership([FromRoute] Guid communityId,
         [FromBody] TransferCommunityOwnershipCommand request, CancellationToken cancellationToken)
     {
@@ -145,7 +140,6 @@ public sealed class CommunitiesController : ControllerBase
 
     [HttpDelete("{communityId:guid}")]
     [Authorize(Policy = ForumAuthorizationPolicies.MemberOrAbove)]
-    [EnableRateLimiting("write")]
     public async Task<IActionResult> Delete([FromRoute] Guid communityId, CancellationToken cancellationToken)
     {
         try
@@ -172,7 +166,6 @@ public sealed class CommunitiesController : ControllerBase
 
     [HttpPost("/api/forum/memberships/{membershipId:guid}/moderator")]
     [Authorize(Policy = ForumAuthorizationPolicies.MemberOrAbove)]
-    [EnableRateLimiting("write")]
     public async Task<IActionResult> AppointModerator([FromRoute] Guid membershipId, CancellationToken cancellationToken)
     {
         var result = await _membershipManager.AppointModeratorAsync(
@@ -184,7 +177,6 @@ public sealed class CommunitiesController : ControllerBase
 
     [HttpDelete("/api/forum/memberships/{membershipId:guid}/moderator")]
     [Authorize(Policy = ForumAuthorizationPolicies.MemberOrAbove)]
-    [EnableRateLimiting("write")]
     public async Task<IActionResult> RemoveModerator([FromRoute] Guid membershipId, CancellationToken cancellationToken)
     {
         var result = await _membershipManager.RemoveModeratorAsync(
